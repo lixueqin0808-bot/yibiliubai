@@ -319,6 +319,26 @@ h1 {
   background: var(--cinnabar);
 }
 
+.legend-koi {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border: 2px solid var(--cinnabar);
+  border-radius: 50%;
+  background: #fff3d8;
+}
+
+.legend-koi::before {
+  position: absolute;
+  left: -8px;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  background: var(--cinnabar);
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  content: "";
+}
+
 .legend-stroke {
   width: 26px;
   height: 5px;

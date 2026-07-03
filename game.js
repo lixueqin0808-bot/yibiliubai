@@ -254,6 +254,7 @@ const levels = [
       { x: 790, y: 300, vx: -110, vy: -150, r: 15 },
     ],
     seals: [{ x: 570, y: 465, r: 30 }],
+    kois: [{ x: 515, y: 350, r: 22 }],
   },
   {
     title: "山河显影 5-2",
@@ -278,6 +279,7 @@ const levels = [
       { x: 535, y: 265, r: 27 },
       { x: 740, y: 505, r: 29 },
     ],
+    kois: [{ x: 610, y: 325, r: 22 }],
   },
   {
     title: "山河显影 5-3",
@@ -303,6 +305,10 @@ const levels = [
       { x: 520, y: 250, r: 27 },
       { x: 690, y: 505, r: 29 },
       { x: 815, y: 455, r: 25 },
+    ],
+    kois: [
+      { x: 470, y: 395, r: 21 },
+      { x: 720, y: 330, r: 21 },
     ],
   },
 ];
@@ -426,6 +432,7 @@ function resetLevel(index = state.levelIndex || 0) {
     initialArea: Math.abs(polygonArea(clonePoints(level.polygon))),
     spirits: level.spirits.map((spirit) => ({ ...spirit })),
     seals: level.seals.map((seal) => ({ ...seal })),
+    kois: (level.kois || []).map((koi) => ({ ...koi })),
     strokes: level.strokes,
     won: false,
     lost: false,
@@ -571,16 +578,25 @@ function attemptCut(start, end) {
   }
   const hitSpiritItem = state.spirits.find((item) => segmentDistanceToPoint(start, end, item) < item.r + 8);
   const hitSealItem = state.seals.find((item) => segmentDistanceToPoint(start, end, item) < item.r + 8);
+  const hitKoiItem = state.kois.find((item) => segmentDistanceToPoint(start, end, item) < item.r + 8);
   const hitSpirit = Boolean(hitSpiritItem);
   const hitSeal = Boolean(hitSealItem);
-  const danger = hitSpirit || hitSeal;
+  const hitKoi = Boolean(hitKoiItem);
+  const danger = hitSpirit || hitSeal || hitKoi;
   if (danger) {
     spendStroke();
     state.shake = 16;
     addCutLine(start, end, true);
-    addDangerPulse(hitSpiritItem || hitSealItem, hitSpirit ? "墨灵" : "朱印");
+    addDangerPulse(hitSpiritItem || hitSealItem || hitKoiItem, hitSpirit ? "墨灵" : hitSeal ? "朱印" : "锦鲤");
     playSound("fail");
-    showCoach(hitSpirit ? "切线碰到了墨灵，损失一笔。等墨灵移开再切。" : "切线碰到了朱印，损失一笔。绕开红色印章。", 3200);
+    showCoach(
+      hitSpirit
+        ? "切线碰到了墨灵，损失一笔。等墨灵移开再切。"
+        : hitSeal
+          ? "切线碰到了朱印，损失一笔。绕开红色印章。"
+          : "切线碰到了锦鲤，损失一笔。锦鲤要被保护在浓墨里。",
+      3200,
+    );
     return;
   }
 
@@ -612,6 +628,14 @@ function attemptCut(start, end) {
     addCutLine(start, end, true);
     playSound("fail");
     showCoach("朱印也要留在浓墨里，不能把它切到留白区域。", 3000);
+    return;
+  }
+
+  const keptKoiOutside = state.kois.some((koi) => !pointInPolygon(koi, keep));
+  if (keptKoiOutside) {
+    addCutLine(start, end, true);
+    playSound("fail");
+    showCoach("锦鲤必须留在浓墨里。先判断墨灵保留侧，再避开锦鲤落笔。", 3400);
     return;
   }
 
@@ -794,6 +818,10 @@ function updateSpirits(dt) {
       const dist = Math.hypot(spirit.x - seal.x, spirit.y - seal.y);
       if (dist < spirit.r + seal.r + 4) bounced = true;
     }
+    for (const koi of state.kois) {
+      const dist = Math.hypot(spirit.x - koi.x, spirit.y - koi.y);
+      if (dist < spirit.r + koi.r + 4) bounced = true;
+    }
     if (bounced) {
       const angle = Math.atan2(spirit.vy, spirit.vx) + Math.PI + (Math.random() - 0.5) * 0.8;
       const speed = Math.hypot(spirit.vx, spirit.vy);
@@ -805,7 +833,10 @@ function updateSpirits(dt) {
   }
   if (pointer) {
     const hit = state.spirits.some((spirit) => segmentDistanceToPoint(pointer.start, pointer.current, spirit) < spirit.r + 5);
-    pointer.danger = hit || state.seals.some((seal) => segmentDistanceToPoint(pointer.start, pointer.current, seal) < seal.r + 5);
+    pointer.danger =
+      hit ||
+      state.seals.some((seal) => segmentDistanceToPoint(pointer.start, pointer.current, seal) < seal.r + 5) ||
+      state.kois.some((koi) => segmentDistanceToPoint(pointer.start, pointer.current, koi) < koi.r + 5);
   }
 }
 
@@ -825,6 +856,7 @@ function draw() {
   drawPolygon();
   drawInkEffects("front");
   drawSeals();
+  drawKois();
   drawSpirits();
   drawDemoLine();
   drawFeedbackEffects();
@@ -963,6 +995,39 @@ function drawSpirits() {
     ctx.strokeStyle = "rgba(183, 53, 45, 0.82)";
     ctx.lineWidth = 3;
     ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawKois() {
+  if (!state.kois || state.kois.length === 0) return;
+  ctx.save();
+  for (const koi of state.kois) {
+    const sway = Math.sin(performance.now() / 360 + koi.x * 0.01) * 0.16;
+    ctx.translate(koi.x, koi.y);
+    ctx.rotate(sway);
+    ctx.fillStyle = "rgba(255, 245, 218, 0.95)";
+    ctx.strokeStyle = "rgba(183, 53, 45, 0.86)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, koi.r * 1.22, koi.r * 0.58, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(183, 53, 45, 0.9)";
+    ctx.beginPath();
+    ctx.moveTo(-koi.r * 1.12, 0);
+    ctx.lineTo(-koi.r * 1.85, -koi.r * 0.58);
+    ctx.lineTo(-koi.r * 1.72, koi.r * 0.58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(koi.r * 0.26, -koi.r * 0.1, koi.r * 0.34, koi.r * 0.22, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#151515";
+    ctx.beginPath();
+    ctx.arc(koi.r * 0.72, -koi.r * 0.14, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
   ctx.restore();
 }
@@ -1125,7 +1190,7 @@ function drawPointer() {
 }
 
 function drawPointerDangerHints() {
-  const items = [...state.spirits, ...state.seals];
+  const items = [...state.spirits, ...state.seals, ...state.kois];
   for (const item of items) {
     const distance = segmentDistanceToPoint(pointer.start, pointer.current, item);
     if (distance >= item.r + 18) continue;
