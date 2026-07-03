@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>一笔留白 MVP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="stage-shell" aria-label="一笔留白游戏区域">
+        <canvas id="game" width="1180" height="720"></canvas>
+
+        <div class="top-bar">
+          <div>
+            <p class="eyebrow">一笔留白</p>
+            <h1 id="levelTitle">初入画境</h1>
+          </div>
+          <div class="stats">
+            <div>
+              <span>留白</span>
+              <strong id="clearedText">0%</strong>
+            </div>
+            <div>
+              <span>目标</span>
+              <strong id="targetText">60%</strong>
+            </div>
+            <div>
+              <span>剩余笔画</span>
+              <strong id="strokeText">6</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-track">
+            <div id="progressBar" class="progress-bar"></div>
+            <i id="targetMarker" class="target-marker"></i>
+          </div>
+        </div>
+
+        <div id="coachTip" class="coach-tip hidden" role="status"></div>
+        <div id="toast" class="toast" role="status"></div>
+
+        <aside id="tutorialPanel" class="tutorial-panel" aria-label="玩法说明">
+          <div class="tutorial-title">
+            <span>玩法说明</span>
+            <button id="tutorialClose" type="button" aria-label="关闭玩法说明">×</button>
+          </div>
+          <p class="tutorial-goal">目标：用笔锋切掉浓墨，让“留白”达到目标比例。</p>
+          <div class="legend-grid" aria-label="元素图例">
+            <div><i class="legend-ink"></i><span>浓墨：可切区域</span></div>
+            <div><i class="legend-spirit"></i><span>墨灵：不能碰</span></div>
+            <div><i class="legend-seal"></i><span>朱印：不能切</span></div>
+            <div><i class="legend-stroke"></i><span>笔锋：你的切线</span></div>
+          </div>
+          <ol>
+            <li>按住鼠标，从浓墨的一边拖到另一边再松开。</li>
+            <li>切割后，含有墨灵的一侧会保留。</li>
+            <li>没有墨灵的一侧会化成留白，进度条会上升。</li>
+            <li>如果切线碰到墨灵或朱印，会损失一笔。</li>
+            <li>如果两边都有墨灵，这一笔不会清除区域。</li>
+          </ol>
+        </aside>
+
+        <div id="overlay" class="overlay hidden">
+          <div class="seal-card">
+            <p id="overlayKicker">画境已开</p>
+            <h2 id="overlayTitle">第一关</h2>
+            <p id="overlayText">从浓墨的一边拖到另一边，切掉没有墨灵的部分。</p>
+            <button id="primaryButton" type="button">开始练习</button>
+          </div>
+        </div>
+
+        <div class="bottom-bar">
+          <button id="soundButton" type="button" aria-pressed="true">音效开</button>
+          <button id="tutorialButton" type="button">玩法</button>
+          <button id="restartButton" type="button">重画本关</button>
+          <button id="nextButton" type="button">续卷</button>
+        </div>
+      </section>
+    </main>
+    <script src="./game.js"></script>
+  </body>
+</html>
