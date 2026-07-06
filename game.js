@@ -657,7 +657,7 @@ function spendStroke() {
   if (state.strokes <= 0 && clearedPercent() < getLevel().target) {
     state.lost = true;
     state.running = false;
-    showOverlay("笔势已尽", "还差一点留白。重画本关时，优先切掉没有墨灵的大块区域。", "重画本关", () => resetLevel(state.levelIndex));
+    showOverlay("笔势已尽", "还差一点留白。重试本关时，优先切掉没有墨灵的大块区域。", "重试", () => resetLevel(state.levelIndex));
   }
 }
 
@@ -673,7 +673,7 @@ function completeLevel() {
     showOverlay(
       "山水显影",
       last ? "MVP 的 15 个关卡已经完成。" : "这一关的留白已经完成。",
-      last ? "重玩" : "续卷",
+      last ? "重玩" : "下一关",
       () => resetLevel(last ? 0 : completedIndex + 1),
     );
   }, 680);
@@ -803,32 +803,101 @@ function updateEffects(dt) {
   state.effects = state.effects.filter((effect) => effect.age < effect.life);
 }
 
+function closestPolygonEdge(point, poly) {
+  let minDist = Infinity;
+  let result = null;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 0.001) continue;
+    let t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = a.x + t * dx;
+    const cy = a.y + t * dy;
+    const dist = Math.hypot(point.x - cx, point.y - cy);
+    if (dist < minDist) {
+      minDist = dist;
+      const nx = -dy;
+      const ny = dx;
+      const nLen = Math.hypot(nx, ny);
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      const testX = midX + (nx / nLen) * 5;
+      const testY = midY + (ny / nLen) * 5;
+      let inwardX, inwardY;
+      if (pointInPolygon({ x: testX, y: testY }, poly)) {
+        inwardX = nx / nLen;
+        inwardY = ny / nLen;
+      } else {
+        inwardX = -nx / nLen;
+        inwardY = -ny / nLen;
+      }
+      result = { x: inwardX, y: inwardY };
+    }
+  }
+  return result;
+}
+
+function reflectVelocity(vx, vy, nx, ny, jitterAmount) {
+  const dot = vx * nx + vy * ny;
+  const jitter = (Math.random() - 0.5) * jitterAmount;
+  const speed = Math.hypot(vx, vy);
+  let rvx = vx - 2 * dot * nx;
+  let rvy = vy - 2 * dot * ny;
+  const rSpeed = Math.hypot(rvx, rvy);
+  if (rSpeed > 0.001) {
+    rvx = (rvx / rSpeed) * speed + (Math.random() - 0.5) * jitter * speed;
+    rvy = (rvy / rSpeed) * speed + (Math.random() - 0.5) * jitter * speed;
+  }
+  return { x: rvx, y: rvy };
+}
+
 function updateSpirits(dt) {
   if (!state.running || !state.polygon) return;
   for (const spirit of state.spirits) {
     spirit.x += spirit.vx * dt;
     spirit.y += spirit.vy * dt;
-    let bounced = false;
+
     if (!pointInPolygon(spirit, state.polygon)) {
       spirit.x -= spirit.vx * dt;
       spirit.y -= spirit.vy * dt;
-      bounced = true;
+      const normal = closestPolygonEdge(spirit, state.polygon);
+      if (normal) {
+        const reflected = reflectVelocity(spirit.vx, spirit.vy, normal.x, normal.y, 0.15);
+        spirit.vx = reflected.x;
+        spirit.vy = reflected.y;
+        spirit.x += spirit.vx * dt * 2;
+        spirit.y += spirit.vy * dt * 2;
+      }
     }
+
     for (const seal of state.seals) {
       const dist = Math.hypot(spirit.x - seal.x, spirit.y - seal.y);
-      if (dist < spirit.r + seal.r + 4) bounced = true;
+      if (dist < spirit.r + seal.r + 4 && dist > 0.001) {
+        const nx = (spirit.x - seal.x) / dist;
+        const ny = (spirit.y - seal.y) / dist;
+        const reflected = reflectVelocity(spirit.vx, spirit.vy, nx, ny, 0.15);
+        spirit.vx = reflected.x;
+        spirit.vy = reflected.y;
+        spirit.x += spirit.vx * dt * 2;
+        spirit.y += spirit.vy * dt * 2;
+      }
     }
+
     for (const koi of state.kois) {
       const dist = Math.hypot(spirit.x - koi.x, spirit.y - koi.y);
-      if (dist < spirit.r + koi.r + 4) bounced = true;
-    }
-    if (bounced) {
-      const angle = Math.atan2(spirit.vy, spirit.vx) + Math.PI + (Math.random() - 0.5) * 0.8;
-      const speed = Math.hypot(spirit.vx, spirit.vy);
-      spirit.vx = Math.cos(angle) * speed;
-      spirit.vy = Math.sin(angle) * speed;
-      spirit.x += spirit.vx * dt * 2;
-      spirit.y += spirit.vy * dt * 2;
+      if (dist < spirit.r + koi.r + 4 && dist > 0.001) {
+        const nx = (spirit.x - koi.x) / dist;
+        const ny = (spirit.y - koi.y) / dist;
+        const reflected = reflectVelocity(spirit.vx, spirit.vy, nx, ny, 0.15);
+        spirit.vx = reflected.x;
+        spirit.vy = reflected.y;
+        spirit.x += spirit.vx * dt * 2;
+        spirit.y += spirit.vy * dt * 2;
+      }
     }
   }
   if (pointer) {
@@ -1176,15 +1245,54 @@ function drawPointer() {
   if (!pointer) return;
   ctx.save();
   ctx.lineCap = "round";
-  ctx.lineWidth = 13;
-  ctx.strokeStyle = pointer.danger ? "rgba(183, 53, 45, 0.78)" : "rgba(15, 15, 15, 0.78)";
-  ctx.beginPath();
-  ctx.moveTo(pointer.start.x, pointer.start.y);
-  ctx.lineTo(pointer.current.x, pointer.current.y);
-  ctx.stroke();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(255, 249, 235, 0.74)";
-  ctx.stroke();
+
+  const trail = pointer.trail;
+  if (trail && trail.length >= 2) {
+    for (let i = 1; i < trail.length; i++) {
+      const prev = trail[i - 1];
+      const curr = trail[i];
+      const dt = Math.max(1, curr.time - prev.time);
+      const dx = curr.x - prev.x;
+      const dy = curr.y - prev.y;
+      const speed = Math.hypot(dx, dy) / (dt / 1000);
+      const width = Math.max(3, 16 - Math.min(speed * 0.01, 13));
+      const alpha = 0.45 + (i / trail.length) * 0.4;
+
+      ctx.globalAlpha = alpha * (pointer.danger ? 0.65 : 0.82);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = pointer.danger
+        ? "rgba(183, 53, 45, 0.82)"
+        : "rgba(15, 15, 15, 0.82)";
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(curr.x, curr.y);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "rgba(255, 249, 235, 0.7)";
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x, trail[0].y);
+    for (let i = 1; i < trail.length; i++) {
+      ctx.lineTo(trail[i].x, trail[i].y);
+    }
+    ctx.lineTo(pointer.current.x, pointer.current.y);
+    ctx.stroke();
+  } else {
+    ctx.lineWidth = 13;
+    ctx.strokeStyle = pointer.danger
+      ? "rgba(183, 53, 45, 0.78)"
+      : "rgba(15, 15, 15, 0.78)";
+    ctx.beginPath();
+    ctx.moveTo(pointer.start.x, pointer.start.y);
+    ctx.lineTo(pointer.current.x, pointer.current.y);
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255, 249, 235, 0.74)";
+    ctx.stroke();
+  }
+
   drawPointerDangerHints();
   ctx.restore();
 }
@@ -1210,6 +1318,21 @@ function loop(now) {
   lastTime = now;
   updateSpirits(dt);
   updateEffects(dt);
+
+  if (pointer && audio.enabled && audio.unlocked && now - pointer.lastBrushSound > 160) {
+    const trail = pointer.trail;
+    if (trail && trail.length >= 2) {
+      const prev = trail[trail.length - 2];
+      const curr = trail[trail.length - 1];
+      const sDt = Math.max(1, curr.time - prev.time);
+      const speed = Math.hypot(curr.x - prev.x, curr.y - prev.y) / (sDt / 1000);
+      const freq = 600 + Math.min(speed * 0.6, 800);
+      playTone({ type: "sine", frequency: freq, endFrequency: freq * 0.7, duration: 0.06, gain: 0.025 });
+      playNoise({ duration: 0.04, gain: 0.015, filter: 1100 });
+    }
+    pointer.lastBrushSound = now;
+  }
+
   draw();
   requestAnimationFrame(loop);
 }
@@ -1233,13 +1356,28 @@ canvas.addEventListener("pointerdown", (event) => {
     state.showDemoLine = false;
     showCoach("保持按住，把笔锋拖到浓墨另一侧再松开。", 2200);
   }
-  pointer = { start: pointerPosition(event), current: pointerPosition(event), danger: false };
+  const pos = pointerPosition(event);
+  const now = performance.now();
+  pointer = {
+    start: pos,
+    current: pos,
+    danger: false,
+    trail: [{ x: pos.x, y: pos.y, time: now }],
+    lastSampleTime: now,
+    lastBrushSound: now,
+  };
 });
 
 canvas.addEventListener("pointermove", (event) => {
   event.preventDefault();
   if (!pointer) return;
   pointer.current = pointerPosition(event);
+  const now = performance.now();
+  if (now - pointer.lastSampleTime > 22) {
+    pointer.trail.push({ x: pointer.current.x, y: pointer.current.y, time: now });
+    pointer.lastSampleTime = now;
+    if (pointer.trail.length > 70) pointer.trail.shift();
+  }
 });
 
 canvas.addEventListener("pointerup", (event) => {
