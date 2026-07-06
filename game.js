@@ -561,24 +561,57 @@ function segmentIntersection(a, b, c, d) {
   return null;
 }
 
-function attemptCut(start, end) {
+function getTrailCutPoints(trail, polygon) {
+  if (!trail || trail.length < 2) return null;
+  let entry = null;
+  let exit = null;
+  for (let i = 1; i < trail.length; i++) {
+    const a = trail[i - 1];
+    const b = trail[i];
+    const aInside = pointInPolygon(a, polygon);
+    const bInside = pointInPolygon(b, polygon);
+    if (aInside !== bInside) {
+      const hits = segmentIntersectionsWithPolygon(a, b, polygon);
+      if (hits.length > 0) {
+        const pt = hits[0];
+        if (!entry) entry = pt;
+        exit = pt;
+      }
+    }
+  }
+  return entry && exit ? { start: entry, end: exit } : null;
+}
+
+function attemptCut(start, end, trail) {
   if (state.won || state.lost) return;
-  if (Math.hypot(end.x - start.x, end.y - start.y) < 42) {
-    addCutLine(start, end, true);
+
+  let cutStart = start;
+  let cutEnd = end;
+
+  if (trail && trail.length >= 2) {
+    const trailCut = getTrailCutPoints(trail, state.polygon);
+    if (trailCut) {
+      cutStart = trailCut.start;
+      cutEnd = trailCut.end;
+    }
+  }
+
+  if (Math.hypot(cutEnd.x - cutStart.x, cutEnd.y - cutStart.y) < 42) {
+    addCutLine(cutStart, cutEnd, true);
     playSound("fail");
     showCoach("这一笔太短。按住鼠标，把线拖到浓墨另一侧再松开。", 2600);
     return;
   }
-  const hits = segmentIntersectionsWithPolygon(start, end, state.polygon);
+  const hits = segmentIntersectionsWithPolygon(cutStart, cutEnd, state.polygon);
   if (hits.length < 2) {
-    addCutLine(start, end, true);
+    addCutLine(cutStart, cutEnd, true);
     playSound("fail");
     showCoach("笔锋需要完整穿过浓墨：从外面划入，再从另一边划出。", 2800);
     return;
   }
-  const hitSpiritItem = state.spirits.find((item) => segmentDistanceToPoint(start, end, item) < item.r + 8);
-  const hitSealItem = state.seals.find((item) => segmentDistanceToPoint(start, end, item) < item.r + 8);
-  const hitKoiItem = state.kois.find((item) => segmentDistanceToPoint(start, end, item) < item.r + 8);
+  const hitSpiritItem = state.spirits.find((item) => segmentDistanceToPoint(cutStart, cutEnd, item) < item.r + 8);
+  const hitSealItem = state.seals.find((item) => segmentDistanceToPoint(cutStart, cutEnd, item) < item.r + 8);
+  const hitKoiItem = state.kois.find((item) => segmentDistanceToPoint(cutStart, cutEnd, item) < item.r + 8);
   const hitSpirit = Boolean(hitSpiritItem);
   const hitSeal = Boolean(hitSealItem);
   const hitKoi = Boolean(hitKoiItem);
@@ -586,7 +619,7 @@ function attemptCut(start, end) {
   if (danger) {
     spendStroke();
     state.shake = 16;
-    addCutLine(start, end, true);
+    addCutLine(cutStart, cutEnd, true);
     addDangerPulse(hitSpiritItem || hitSealItem || hitKoiItem, hitSpirit ? "墨灵" : hitSeal ? "朱印" : "锦鲤");
     playSound("fail");
     showCoach(
@@ -600,8 +633,8 @@ function attemptCut(start, end) {
     return;
   }
 
-  const positive = clipPolygon(state.polygon, start, end, true);
-  const negative = clipPolygon(state.polygon, start, end, false);
+  const positive = clipPolygon(state.polygon, cutStart, cutEnd, true);
+  const negative = clipPolygon(state.polygon, cutStart, cutEnd, false);
   if (positive.length < 3 || negative.length < 3) {
     showCoach("这一笔没有真正切开浓墨，试着拉得更长、更斜一点。", 2800);
     playSound("fail");
@@ -617,7 +650,7 @@ function attemptCut(start, end) {
   if (keep === positive) removed = negative;
   if (keep === negative) removed = positive;
   if (!keep) {
-    addCutLine(start, end, true);
+    addCutLine(cutStart, cutEnd, true);
     playSound("fail");
     showCoach("两边都有墨灵，所以没有哪一块能被清掉。试着把所有墨灵留在同一侧。", 3400);
     return;
@@ -625,7 +658,7 @@ function attemptCut(start, end) {
 
   const keptSealOutside = state.seals.some((seal) => !pointInPolygon(seal, keep));
   if (keptSealOutside) {
-    addCutLine(start, end, true);
+    addCutLine(cutStart, cutEnd, true);
     playSound("fail");
     showCoach("朱印也要留在浓墨里，不能把它切到留白区域。", 3000);
     return;
@@ -633,15 +666,15 @@ function attemptCut(start, end) {
 
   const keptKoiOutside = state.kois.some((koi) => !pointInPolygon(koi, keep));
   if (keptKoiOutside) {
-    addCutLine(start, end, true);
+    addCutLine(cutStart, cutEnd, true);
     playSound("fail");
     showCoach("锦鲤必须留在浓墨里。先判断墨灵保留侧，再避开锦鲤落笔。", 3400);
     return;
   }
 
   spendStroke();
-  addCutLine(start, end, false);
-  addInkBurst(removed, start, end);
+  addCutLine(cutStart, cutEnd, false);
+  addInkBurst(removed, cutStart, cutEnd);
   state.polygon = keep;
   state.hasSuccessfulCut = true;
   state.showDemoLine = false;
@@ -1383,10 +1416,11 @@ canvas.addEventListener("pointermove", (event) => {
 canvas.addEventListener("pointerup", (event) => {
   event.preventDefault();
   if (!pointer) return;
+  const trail = pointer.trail ? [...pointer.trail] : null;
   const cut = { start: pointer.start, end: pointerPosition(event) };
   pointer = null;
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-  attemptCut(cut.start, cut.end);
+  attemptCut(cut.start, cut.end, trail);
 });
 
 canvas.addEventListener("pointercancel", (event) => {
