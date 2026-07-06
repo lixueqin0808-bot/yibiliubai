@@ -412,7 +412,56 @@ h1 {
 }
 .tutorial-panel b { color: var(--ink); }
 
-/* ── bottom bar ── */
+/* ── level select panel ── */
+.level-panel {
+  position: absolute; inset: 0; z-index: 5;
+  display: grid; place-items: center;
+  background: rgba(28, 22, 14, 0.28);
+  backdrop-filter: blur(4px);
+}
+.level-panel.hidden { display: none; }
+
+.level-panel-inner {
+  width: min(560px, calc(100% - 40px));
+  max-height: calc(100% - 40px);
+  padding: 20px 22px 22px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(250,246,236,0.97) 0%, rgba(240,233,216,0.94) 100%);
+  border: 1px solid rgba(28, 22, 14, 0.10);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+}
+
+.level-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  color: var(--cinnabar); font-size: 13px; font-weight: 800; letter-spacing: 0.04em;
+}
+
+.level-grid { display: flex; flex-direction: column; gap: 14px; }
+
+.level-chapter { }
+.level-chapter-name {
+  margin: 0 0 6px;
+  color: var(--ink-soft); font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+}
+.level-chapter-rows { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.level-btn {
+  min-width: 68px; min-height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-xs);
+  color: var(--ink-soft); font-size: 12px; font-weight: 700;
+  background: rgba(250,246,236,0.72);
+  border: 1px solid rgba(28,22,14,0.08);
+  box-shadow: none; cursor: pointer;
+  transition: all 150ms ease;
+}
+.level-btn:hover { background: rgba(28,22,14,0.05); color: var(--ink); }
+.level-btn.active {
+  background: var(--cinnabar); color: #fffaf0; border-color: var(--cinnabar);
+  box-shadow: 0 2px 8px rgba(139,31,26,0.18);
+}
 .bottom-bar {
   right: 22px;
   bottom: 20px;

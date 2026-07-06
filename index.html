@@ -74,8 +74,19 @@
           </div>
         </div>
 
+        <div id="levelPanel" class="level-panel hidden">
+          <div class="level-panel-inner">
+            <div class="level-panel-head">
+              <span>选关</span>
+              <button id="levelPanelClose" type="button" class="btn-ghost" style="min-width:32px;min-height:32px;padding:0;font-size:18px;">×</button>
+            </div>
+            <div id="levelGrid" class="level-grid"></div>
+          </div>
+        </div>
+
         <div class="bottom-bar">
           <button id="soundButton" type="button" aria-pressed="true" class="btn-sound">音效开</button>
+          <button id="levelSelectButton" type="button" class="btn-ghost">选关</button>
           <button id="tutorialButton" type="button" class="btn-ghost">帮助</button>
           <button id="restartButton" type="button" class="btn-ghost">重试</button>
           <button id="nextButton" type="button" class="btn-primary">下一关</button>

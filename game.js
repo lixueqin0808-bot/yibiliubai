@@ -21,6 +21,10 @@ const ui = {
   tutorialClose: document.getElementById("tutorialClose"),
   restartButton: document.getElementById("restartButton"),
   nextButton: document.getElementById("nextButton"),
+  levelSelectButton: document.getElementById("levelSelectButton"),
+  levelPanel: document.getElementById("levelPanel"),
+  levelPanelClose: document.getElementById("levelPanelClose"),
+  levelGrid: document.getElementById("levelGrid"),
 };
 
 const levels = [
@@ -1454,10 +1458,42 @@ ui.nextButton.addEventListener("click", () => {
   if (state.won) resetLevel(Math.min(state.levelIndex + 1, levels.length - 1));
 });
 
-ui.primaryButton.onclick = () => {
+ui.levelSelectButton.addEventListener("click", () => {
   ensureAudio();
-  resetLevel(0);
-};
+  buildLevelGrid();
+  ui.levelPanel.classList.remove("hidden");
+});
+
+ui.levelPanelClose.addEventListener("click", () => {
+  ui.levelPanel.classList.add("hidden");
+});
+
+function buildLevelGrid() {
+  ui.levelGrid.innerHTML = "";
+  for (const ch of chapters) {
+    const div = document.createElement("div");
+    div.className = "level-chapter";
+    const name = document.createElement("div");
+    name.className = "level-chapter-name";
+    name.textContent = ch.name + " · " + ch.subtitle;
+    div.appendChild(name);
+    const row = document.createElement("div");
+    row.className = "level-chapter-rows";
+    for (let i = ch.from; i <= ch.to; i++) {
+      const btn = document.createElement("button");
+      btn.className = "level-btn" + (i === state.levelIndex ? " active" : "");
+      btn.textContent = levels[i].title;
+      btn.addEventListener("click", () => {
+        ui.levelPanel.classList.add("hidden");
+        resetLevel(i);
+      });
+      row.appendChild(btn);
+    }
+    div.appendChild(row);
+    ui.levelGrid.appendChild(div);
+  }
+}
+
 ui.nextButton.disabled = true;
 setSoundEnabled(true);
 showOverlay("第一关", "黑色大块是浓墨，黑色小球是墨灵。按住鼠标从浓墨一边拖到另一边，切掉没有墨灵的部分。", "开始练习", () => resetLevel(0));
