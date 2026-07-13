@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await expect(page.getByText("初试锋芒", { exact: true }).first()).toBeVisible();
+  await expect(page.locator(".level-mark")).toHaveText("01");
 
   const nonPaperPixels = await page.locator("#game").evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");

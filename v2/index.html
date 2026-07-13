@@ -11,22 +11,16 @@
       <canvas id="game" width="390" height="844" aria-label="水墨切割游戏画面"></canvas>
 
       <header class="hud">
-        <div class="title-lockup">
-          <span>一笔留白</span>
-          <strong>初试锋芒</strong>
-        </div>
+        <strong class="level-mark" aria-label="第一关">01</strong>
         <div class="hud-actions">
           <button id="sound" class="icon-button" type="button" aria-label="关闭声音" title="关闭声音" aria-pressed="true">♪</button>
-          <button id="restart" class="icon-button" type="button" aria-label="重新开始" title="重新开始">↻</button>
           <button id="pause" class="icon-button" type="button" aria-label="暂停" title="暂停">Ⅱ</button>
         </div>
       </header>
 
       <section class="progress" aria-label="留白进度">
         <div class="progress-copy">
-          <span>留白</span>
           <strong id="progressText">0%</strong>
-          <span class="target">目标 50%</span>
         </div>
         <div class="progress-track" aria-hidden="true">
           <i id="progressBar"></i>
@@ -34,7 +28,7 @@
         </div>
       </section>
 
-      <p id="tip" class="tip" role="status">从画卷一侧划到另一侧</p>
+      <p id="tip" class="tip" role="status">横划一笔</p>
 
       <dialog id="pauseDialog" class="dialog">
         <h2>停笔</h2>

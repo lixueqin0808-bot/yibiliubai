@@ -53,28 +53,23 @@ canvas {
 
 .hud {
   position: absolute;
-  inset: max(18px, env(safe-area-inset-top)) 20px auto;
+  inset: max(16px, env(safe-area-inset-top)) 18px auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   pointer-events: none;
 }
 
-.title-lockup {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.level-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgb(21 21 20 / 48%);
   color: var(--ink);
-}
-
-.title-lockup span {
-  font-family: STKaiti, KaiTi, serif;
-  font-size: 13px;
-}
-
-.title-lockup strong {
-  font-size: 19px;
-  letter-spacing: 0;
+  font-family: Georgia, serif;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .hud-actions {
@@ -92,7 +87,7 @@ canvas {
   border: 0;
   border-radius: 50%;
   color: var(--ink);
-  background: rgb(244 244 242 / 82%);
+  background: transparent;
   font-size: 18px;
   cursor: pointer;
 }
@@ -106,55 +101,84 @@ canvas {
 
 .progress {
   position: absolute;
-  inset: 94px 22px auto;
+  inset: 74px 54px auto;
   color: var(--ink);
   pointer-events: none;
 }
 
 .progress-copy {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
-  font-size: 12px;
+  justify-content: center;
+  min-height: 28px;
 }
 
 .progress-copy strong {
-  font-size: 20px;
-  transform-origin: left center;
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 500;
+  transform-origin: center;
 }
 
 .progress-copy strong.impact {
   animation: progress-impact 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.progress-copy .target {
-  margin-left: auto;
-  color: #4f4f4c;
-}
-
 .progress-track {
   position: relative;
-  height: 3px;
-  margin-top: 7px;
+  height: 7px;
+  margin-top: 2px;
   overflow: visible;
-  background: #c9c9c4;
+  border: 1px solid #74746f;
+  background: #deded8;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
+}
+
+.progress-track::after {
+  position: absolute;
+  inset: -2px 20% -2px auto;
+  width: 1px;
+  background: rgb(21 21 20 / 30%);
+  box-shadow: -51px 0 rgb(21 21 20 / 30%), -102px 0 rgb(21 21 20 / 30%), 51px 0 rgb(21 21 20 / 30%);
+  content: "";
 }
 
 .progress-track i {
   display: block;
   width: 0;
   height: 100%;
-  background: var(--ink);
+  background: #31312e;
   transition: width 180ms ease-out;
 }
 
 .progress-track b {
   position: absolute;
-  top: -4px;
+  top: -6px;
   left: 50%;
-  width: 2px;
-  height: 11px;
+  z-index: 1;
+  width: 4px;
+  height: 19px;
   background: var(--cinnabar);
+  transform: rotate(4deg);
+}
+
+.progress-track b::before,
+.progress-track b::after {
+  position: absolute;
+  top: 7px;
+  width: 8px;
+  height: 2px;
+  background: var(--cinnabar);
+  content: "";
+}
+
+.progress-track b::before {
+  right: 1px;
+  transform: rotate(32deg);
+}
+
+.progress-track b::after {
+  left: 1px;
+  transform: rotate(-32deg);
 }
 
 .tip {
@@ -164,9 +188,10 @@ canvas {
   left: 24px;
   min-height: 24px;
   margin: 0;
-  color: #3f3f3c;
+  color: #4c4c48;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
+  transition: opacity 160ms ease-out;
   pointer-events: none;
 }
 

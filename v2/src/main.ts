@@ -18,7 +18,6 @@ const game = new Game(canvas, {
   stars: required("#stars"),
 });
 
-required<HTMLButtonElement>("#restart").addEventListener("click", () => game.restart());
 required<HTMLButtonElement>("#pause").addEventListener("click", () => game.pause());
 required<HTMLButtonElement>("#resume").addEventListener("click", () => game.resume());
 required<HTMLButtonElement>("#dialogRestart").addEventListener("click", () => game.restart());

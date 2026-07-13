@@ -89,7 +89,7 @@ export class Game {
     this.pausedDuration = 0;
     this.effectiveCuts = 0;
     this.updateProgress();
-    this.setTip("从画卷一侧划到另一侧", 2200);
+    this.setTip("横划一笔", 1500);
     if (this.elements.pauseDialog.open) this.elements.pauseDialog.close();
     if (this.elements.resultDialog.open) this.elements.resultDialog.close();
   }
@@ -244,7 +244,7 @@ export class Game {
     window.setTimeout(() => this.elements.progressText.classList.remove("impact"), 280);
     this.updateProgress();
     if (this.clearedRatio >= GOLDEN_LEVEL.target) this.complete();
-    else this.setTip("很好，继续留白", 1100);
+    else this.setTip("", 0);
     return true;
   }
 
@@ -295,7 +295,7 @@ export class Game {
     window.clearTimeout(this.tipTimeout);
     this.elements.tip.textContent = message;
     this.tipTimeout = window.setTimeout(() => {
-      if (this.status === "playing") this.elements.tip.textContent = "观察墨刃，再落笔";
+      if (this.status === "playing") this.elements.tip.textContent = "";
     }, duration);
   }
 
