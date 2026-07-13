@@ -1,5 +1,6 @@
 import type { CutPreview, GameStatus, Point, Polygon } from "./types";
-import { segmentHitsCircle } from "../geometry/collision";
+import { AudioManager } from "../audio/AudioManager";
+import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
 import { distanceToPolygonEdge, pointInPolygon, polygonArea } from "../geometry/polygon";
 import { GOLDEN_LEVEL, GOLDEN_POLYGON, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "../levels/goldenLevel";
@@ -44,6 +45,8 @@ export class Game {
   private cutEffect: CutEffect | null = null;
   private dangerPulse: { point: Point; startedAt: number } | null = null;
   private tipTimeout = 0;
+  private readonly audio = new AudioManager();
+  private lastBladePosition: Point = { ...GOLDEN_LEVEL.blade };
 
   constructor(private readonly canvas: HTMLCanvasElement, elements: GameElements) {
     const context = canvas.getContext("2d");
@@ -86,6 +89,14 @@ export class Game {
     this.elements.pauseDialog.close();
   }
 
+  toggleSound(): boolean {
+    return this.audio.toggle();
+  }
+
+  get soundEnabled(): boolean {
+    return this.audio.isEnabled;
+  }
+
   private resizeCanvas(): void {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = LOGICAL_WIDTH * ratio;
@@ -111,6 +122,7 @@ export class Game {
       }
       this.canvas.setPointerCapture(event.pointerId);
       this.preview = { start: point, end: point, danger: false };
+      this.audio.playStart();
       event.preventDefault();
     });
 
@@ -170,6 +182,7 @@ export class Game {
     this.physics.setBoundary(this.polygon);
     this.effectiveCuts += 1;
     this.cutEffect = { lineStart: start, lineEnd: end, removed, startedAt: performance.now() };
+    this.audio.playSuccess();
     this.updateProgress();
     if (this.clearedRatio >= GOLDEN_LEVEL.target) this.complete();
     else this.setTip("很好，继续留白", 1100);
@@ -181,6 +194,7 @@ export class Game {
     this.preview = null;
     this.dangerPulse = { point: { ...point }, startedAt: performance.now() };
     this.setTip("笔锋碰到墨刃", 500);
+    this.audio.playFail();
     if (navigator.vibrate) navigator.vibrate(24);
     window.setTimeout(() => this.restart(), 520);
   }
@@ -195,6 +209,7 @@ export class Game {
     this.elements.stars.textContent = "★".repeat(starCount) + "☆".repeat(3 - starCount);
     this.elements.stars.setAttribute("aria-label", `${starCount}星评价`);
     this.elements.resultMeta.textContent = `用时 ${seconds} 秒 · ${this.effectiveCuts} 笔`;
+    this.audio.playComplete();
     window.setTimeout(() => this.elements.resultDialog.showModal(), 360);
   }
 
@@ -223,7 +238,17 @@ export class Game {
   private frame(time: number): void {
     const delta = time - this.lastFrame;
     this.lastFrame = time;
-    if (this.status === "playing") this.physics.update(delta);
+    if (this.status === "playing") {
+      this.lastBladePosition = this.physics.position;
+      this.physics.update(delta);
+      if (this.preview && sweptCircleHitsSegment(
+        this.lastBladePosition,
+        this.physics.position,
+        GOLDEN_LEVEL.blade.radius + 2,
+        this.preview.start,
+        this.preview.end,
+      )) this.fail(this.physics.position);
+    }
     this.draw(time);
     requestAnimationFrame((nextTime) => this.frame(nextTime));
   }

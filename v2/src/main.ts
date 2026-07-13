@@ -23,3 +23,17 @@ required<HTMLButtonElement>("#pause").addEventListener("click", () => game.pause
 required<HTMLButtonElement>("#resume").addEventListener("click", () => game.resume());
 required<HTMLButtonElement>("#dialogRestart").addEventListener("click", () => game.restart());
 required<HTMLButtonElement>("#again").addEventListener("click", () => game.restart());
+
+const soundButton = required<HTMLButtonElement>("#sound");
+function renderSoundState(): void {
+  const enabled = game.soundEnabled;
+  soundButton.textContent = enabled ? "♪" : "×";
+  soundButton.setAttribute("aria-label", enabled ? "关闭声音" : "打开声音");
+  soundButton.setAttribute("title", enabled ? "关闭声音" : "打开声音");
+  soundButton.setAttribute("aria-pressed", String(enabled));
+}
+soundButton.addEventListener("click", () => {
+  game.toggleSound();
+  renderSoundState();
+});
+renderSoundState();
