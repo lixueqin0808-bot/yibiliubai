@@ -1,0 +1,248 @@
+:root {
+  color: #151514;
+  background: #111110;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-synthesis: none;
+  --ink: #151514;
+  --paper: #f4f4f2;
+  --muted: #666662;
+  --cinnabar: #a5261f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #111110;
+  overscroll-behavior: none;
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+button {
+  font: inherit;
+}
+
+.game-shell {
+  position: relative;
+  width: min(100vw, calc(100dvh * 390 / 844), 430px);
+  aspect-ratio: 390 / 844;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--paper);
+  isolation: isolate;
+  touch-action: none;
+  user-select: none;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.hud {
+  position: absolute;
+  inset: max(18px, env(safe-area-inset-top)) 20px auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.title-lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink);
+}
+
+.title-lockup span {
+  font-family: STKaiti, KaiTi, serif;
+  font-size: 13px;
+}
+
+.title-lockup strong {
+  font-size: 19px;
+  letter-spacing: 0;
+}
+
+.hud-actions {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.icon-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: rgb(244 244 242 / 82%);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.icon-button:focus-visible,
+.primary-button:focus-visible,
+.text-button:focus-visible {
+  outline: 3px solid var(--cinnabar);
+  outline-offset: 2px;
+}
+
+.progress {
+  position: absolute;
+  inset: 94px 22px auto;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.progress-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.progress-copy strong {
+  font-size: 20px;
+}
+
+.progress-copy .target {
+  margin-left: auto;
+  color: #4f4f4c;
+}
+
+.progress-track {
+  position: relative;
+  height: 3px;
+  margin-top: 7px;
+  overflow: visible;
+  background: #c9c9c4;
+}
+
+.progress-track i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--ink);
+  transition: width 180ms ease-out;
+}
+
+.progress-track b {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 2px;
+  height: 11px;
+  background: var(--cinnabar);
+}
+
+.tip {
+  position: absolute;
+  right: 24px;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 24px;
+  min-height: 24px;
+  margin: 0;
+  color: #3f3f3c;
+  text-align: center;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.dialog {
+  width: min(310px, calc(100% - 48px));
+  padding: 28px 24px 22px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #f4f4f2;
+  text-align: center;
+}
+
+.dialog::backdrop {
+  background: rgb(13 13 12 / 68%);
+}
+
+.dialog h2 {
+  margin: 0 0 8px;
+  font-family: STKaiti, KaiTi, serif;
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+.dialog p {
+  margin: 0 0 22px;
+  color: #555551;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.primary-button,
+.text-button {
+  min-height: 46px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 0;
+  color: #fff;
+  background: var(--cinnabar);
+  font-weight: 700;
+}
+
+.text-button {
+  border: 1px solid #979791;
+  color: var(--ink);
+  background: transparent;
+}
+
+.stamp {
+  display: inline-grid;
+  min-width: 78px;
+  min-height: 78px;
+  padding: 10px;
+  place-items: center;
+  border: 3px double var(--cinnabar);
+  color: var(--cinnabar);
+  font-family: STKaiti, KaiTi, serif;
+  font-size: 18px;
+  transform: rotate(-5deg);
+}
+
+.stars {
+  margin: 18px 0 6px;
+  color: var(--cinnabar);
+  font-size: 25px;
+  letter-spacing: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

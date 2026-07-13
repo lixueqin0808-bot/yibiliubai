@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#111110" />
+    <title>一笔留白 V2</title>
+  </head>
+  <body>
+    <main class="game-shell" aria-label="一笔留白游戏">
+      <canvas id="game" width="390" height="844" aria-label="水墨切割游戏画面"></canvas>
+
+      <header class="hud">
+        <div class="title-lockup">
+          <span>一笔留白</span>
+          <strong>初试锋芒</strong>
+        </div>
+        <div class="hud-actions">
+          <button id="restart" class="icon-button" type="button" aria-label="重新开始" title="重新开始">↻</button>
+          <button id="pause" class="icon-button" type="button" aria-label="暂停" title="暂停">Ⅱ</button>
+        </div>
+      </header>
+
+      <section class="progress" aria-label="留白进度">
+        <div class="progress-copy">
+          <span>留白</span>
+          <strong id="progressText">0%</strong>
+          <span class="target">目标 50%</span>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <i id="progressBar"></i>
+          <b></b>
+        </div>
+      </section>
+
+      <p id="tip" class="tip" role="status">从画卷一侧划到另一侧</p>
+
+      <dialog id="pauseDialog" class="dialog">
+        <h2>停笔</h2>
+        <p>画境已经暂停。</p>
+        <div class="dialog-actions">
+          <button id="resume" class="primary-button" type="button">继续</button>
+          <button id="dialogRestart" class="text-button" type="button">重新开始</button>
+        </div>
+      </dialog>
+
+      <dialog id="resultDialog" class="dialog result-dialog">
+        <span class="stamp">留白已成</span>
+        <div id="stars" class="stars" aria-label="三星评价">★★★</div>
+        <h2>初试锋芒</h2>
+        <p id="resultMeta">用时 0 秒 · 0 笔</p>
+        <button id="again" class="primary-button" type="button">再试一次</button>
+      </dialog>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

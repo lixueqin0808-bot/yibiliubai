@@ -1,0 +1,379 @@
+import type { CutPreview, GameStatus, Point, Polygon } from "./types";
+import { segmentHitsCircle } from "../geometry/collision";
+import { splitPolygon } from "../geometry/cut";
+import { distanceToPolygonEdge, pointInPolygon, polygonArea } from "../geometry/polygon";
+import { GOLDEN_LEVEL, GOLDEN_POLYGON, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "../levels/goldenLevel";
+import { PhysicsWorld } from "../physics/PhysicsWorld";
+
+interface GameElements {
+  progressText: HTMLElement;
+  progressBar: HTMLElement;
+  tip: HTMLElement;
+  pauseDialog: HTMLDialogElement;
+  resultDialog: HTMLDialogElement;
+  resultMeta: HTMLElement;
+  stars: HTMLElement;
+}
+
+interface CutEffect {
+  lineStart: Point;
+  lineEnd: Point;
+  removed: Polygon;
+  startedAt: number;
+}
+
+export class Game {
+  private readonly context: CanvasRenderingContext2D;
+  private readonly elements: GameElements;
+  private polygon: Polygon = structuredClone(GOLDEN_POLYGON);
+  private readonly initialArea = polygonArea(GOLDEN_POLYGON);
+  private physics = new PhysicsWorld(
+    this.polygon,
+    GOLDEN_LEVEL.blade,
+    GOLDEN_LEVEL.blade.radius,
+    GOLDEN_LEVEL.blade.velocity,
+    GOLDEN_LEVEL.blade.speed,
+  );
+  private preview: CutPreview | null = null;
+  private status: GameStatus = "playing";
+  private lastFrame = performance.now();
+  private startTime = performance.now();
+  private pausedAt = 0;
+  private pausedDuration = 0;
+  private effectiveCuts = 0;
+  private cutEffect: CutEffect | null = null;
+  private dangerPulse: { point: Point; startedAt: number } | null = null;
+  private tipTimeout = 0;
+
+  constructor(private readonly canvas: HTMLCanvasElement, elements: GameElements) {
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas 2D is unavailable");
+    this.context = context;
+    this.elements = elements;
+    this.resizeCanvas();
+    this.bindPointerEvents();
+    window.addEventListener("resize", () => this.resizeCanvas());
+    requestAnimationFrame((time) => this.frame(time));
+  }
+
+  restart(): void {
+    this.polygon = structuredClone(GOLDEN_POLYGON);
+    this.physics.reset(GOLDEN_LEVEL.blade, GOLDEN_LEVEL.blade.velocity, this.polygon);
+    this.status = "playing";
+    this.preview = null;
+    this.cutEffect = null;
+    this.dangerPulse = null;
+    this.startTime = performance.now();
+    this.pausedDuration = 0;
+    this.effectiveCuts = 0;
+    this.updateProgress();
+    this.setTip("从画卷一侧划到另一侧", 2200);
+    if (this.elements.pauseDialog.open) this.elements.pauseDialog.close();
+    if (this.elements.resultDialog.open) this.elements.resultDialog.close();
+  }
+
+  pause(): void {
+    if (this.status !== "playing") return;
+    this.status = "paused";
+    this.pausedAt = performance.now();
+    this.elements.pauseDialog.showModal();
+  }
+
+  resume(): void {
+    if (this.status !== "paused") return;
+    this.pausedDuration += performance.now() - this.pausedAt;
+    this.status = "playing";
+    this.elements.pauseDialog.close();
+  }
+
+  private resizeCanvas(): void {
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = LOGICAL_WIDTH * ratio;
+    this.canvas.height = LOGICAL_HEIGHT * ratio;
+    this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  private pointerPosition(event: PointerEvent): Point {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * LOGICAL_WIDTH,
+      y: ((event.clientY - rect.top) / rect.height) * LOGICAL_HEIGHT,
+    };
+  }
+
+  private bindPointerEvents(): void {
+    this.canvas.addEventListener("pointerdown", (event) => {
+      if (this.status !== "playing") return;
+      const point = this.pointerPosition(event);
+      if (distanceToPolygonEdge(point, this.polygon) > 24) {
+        this.setTip("请从画卷边缘起笔", 1300);
+        return;
+      }
+      this.canvas.setPointerCapture(event.pointerId);
+      this.preview = { start: point, end: point, danger: false };
+      event.preventDefault();
+    });
+
+    this.canvas.addEventListener("pointermove", (event) => {
+      if (!this.preview || this.status !== "playing") return;
+      this.preview.end = this.pointerPosition(event);
+      this.preview.danger = segmentHitsCircle(
+        this.preview.start,
+        this.preview.end,
+        this.physics.position,
+        GOLDEN_LEVEL.blade.radius + 2,
+      );
+      if (this.preview.danger) this.fail(this.physics.position);
+      event.preventDefault();
+    });
+
+    const finish = (event: PointerEvent) => {
+      if (!this.preview || this.status !== "playing") return;
+      const start = this.preview.start;
+      const end = this.pointerPosition(event);
+      this.preview = null;
+      this.attemptCut(start, end);
+      event.preventDefault();
+    };
+    this.canvas.addEventListener("pointerup", finish);
+    this.canvas.addEventListener("pointercancel", () => { this.preview = null; });
+    this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  }
+
+  private attemptCut(start: Point, end: Point): void {
+    if (distanceToPolygonEdge(end, this.polygon) > 24) {
+      this.setTip("要划到另一侧边缘", 1300);
+      return;
+    }
+    if (segmentHitsCircle(start, end, this.physics.position, GOLDEN_LEVEL.blade.radius + 2)) {
+      this.fail(this.physics.position);
+      return;
+    }
+
+    const result = splitPolygon(this.polygon, start, end);
+    if (!result) {
+      this.setTip("这一笔没有切开", 1300);
+      return;
+    }
+
+    const blade = this.physics.position;
+    const inPositive = pointInPolygon(blade, result.positive);
+    const inNegative = pointInPolygon(blade, result.negative);
+    if (inPositive === inNegative) {
+      this.setTip("墨刃位置不明", 1300);
+      return;
+    }
+
+    const kept = inPositive ? result.positive : result.negative;
+    const removed = inPositive ? result.negative : result.positive;
+    this.polygon = kept;
+    this.physics.setBoundary(this.polygon);
+    this.effectiveCuts += 1;
+    this.cutEffect = { lineStart: start, lineEnd: end, removed, startedAt: performance.now() };
+    this.updateProgress();
+    if (this.clearedRatio >= GOLDEN_LEVEL.target) this.complete();
+    else this.setTip("很好，继续留白", 1100);
+  }
+
+  private fail(point: Point): void {
+    if (this.status !== "playing") return;
+    this.status = "failed";
+    this.preview = null;
+    this.dangerPulse = { point: { ...point }, startedAt: performance.now() };
+    this.setTip("笔锋碰到墨刃", 500);
+    if (navigator.vibrate) navigator.vibrate(24);
+    window.setTimeout(() => this.restart(), 520);
+  }
+
+  private complete(): void {
+    this.status = "completed";
+    const seconds = this.elapsedSeconds;
+    const thresholds = GOLDEN_LEVEL.starThresholds;
+    const starCount = seconds <= thresholds.three.seconds && this.effectiveCuts <= thresholds.three.cuts
+      ? 3
+      : seconds <= thresholds.two.seconds && this.effectiveCuts <= thresholds.two.cuts ? 2 : 1;
+    this.elements.stars.textContent = "★".repeat(starCount) + "☆".repeat(3 - starCount);
+    this.elements.stars.setAttribute("aria-label", `${starCount}星评价`);
+    this.elements.resultMeta.textContent = `用时 ${seconds} 秒 · ${this.effectiveCuts} 笔`;
+    window.setTimeout(() => this.elements.resultDialog.showModal(), 360);
+  }
+
+  private get clearedRatio(): number {
+    return Math.max(0, Math.min(1, 1 - polygonArea(this.polygon) / this.initialArea));
+  }
+
+  private get elapsedSeconds(): number {
+    return Math.max(1, Math.round((performance.now() - this.startTime - this.pausedDuration) / 1000));
+  }
+
+  private updateProgress(): void {
+    const percent = Math.round(this.clearedRatio * 100);
+    this.elements.progressText.textContent = `${percent}%`;
+    this.elements.progressBar.style.width = `${percent}%`;
+  }
+
+  private setTip(message: string, duration: number): void {
+    window.clearTimeout(this.tipTimeout);
+    this.elements.tip.textContent = message;
+    this.tipTimeout = window.setTimeout(() => {
+      if (this.status === "playing") this.elements.tip.textContent = "观察墨刃，再落笔";
+    }, duration);
+  }
+
+  private frame(time: number): void {
+    const delta = time - this.lastFrame;
+    this.lastFrame = time;
+    if (this.status === "playing") this.physics.update(delta);
+    this.draw(time);
+    requestAnimationFrame((nextTime) => this.frame(nextTime));
+  }
+
+  private draw(time: number): void {
+    const ctx = this.context;
+    ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    ctx.fillStyle = "#f4f4f2";
+    ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+    this.drawAtmosphere(ctx);
+    this.drawPolygon(ctx);
+    this.drawGuide(ctx, time);
+    this.drawBlade(ctx, time);
+    this.drawCutEffect(ctx, time);
+    this.drawPreview(ctx);
+    this.drawDanger(ctx, time);
+  }
+
+  private drawAtmosphere(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.globalAlpha = 0.055;
+    ctx.strokeStyle = "#151514";
+    ctx.lineCap = "butt";
+    ctx.lineWidth = 28;
+    ctx.beginPath();
+    ctx.moveTo(-25, 248);
+    ctx.bezierCurveTo(72, 216, 132, 260, 226, 232);
+    ctx.bezierCurveTo(300, 210, 356, 184, 424, 202);
+    ctx.stroke();
+    ctx.globalAlpha = 0.035;
+    ctx.lineWidth = 44;
+    ctx.beginPath();
+    ctx.moveTo(-35, 642);
+    ctx.bezierCurveTo(56, 606, 132, 676, 216, 630);
+    ctx.bezierCurveTo(290, 590, 350, 612, 430, 560);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawPolygon(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.beginPath();
+    this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+    ctx.closePath();
+    ctx.fillStyle = "#171716";
+    ctx.fill();
+    ctx.strokeStyle = "#050505";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.clip();
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = "#f4f4f2";
+    ctx.lineWidth = 1;
+    for (let y = 188; y < 710; y += 17) {
+      ctx.beginPath();
+      ctx.moveTo(36, y);
+      ctx.bezierCurveTo(120, y - 5, 270, y + 5, 354, y - 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawBlade(ctx: CanvasRenderingContext2D, time: number): void {
+    const position = this.physics.position;
+    ctx.save();
+    ctx.translate(position.x, position.y);
+    ctx.rotate(time * 0.004);
+    for (let index = 0; index < 4; index += 1) {
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath();
+      ctx.moveTo(5, -4);
+      ctx.quadraticCurveTo(18, -9, 25, 0);
+      ctx.quadraticCurveTo(17, 7, 5, 4);
+      ctx.closePath();
+      ctx.fillStyle = "#eeeeea";
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#a5261f";
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawGuide(ctx: CanvasRenderingContext2D, time: number): void {
+    if (this.effectiveCuts > 0 || this.preview) return;
+    const { start, end } = GOLDEN_LEVEL.guide;
+    const pulse = 0.35 + Math.sin(time * 0.004) * 0.15;
+    ctx.save();
+    ctx.setLineDash([7, 8]);
+    ctx.lineDashOffset = -time * 0.025;
+    ctx.strokeStyle = `rgba(244,244,242,${pulse})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawPreview(ctx: CanvasRenderingContext2D): void {
+    if (!this.preview) return;
+    ctx.save();
+    ctx.strokeStyle = this.preview.danger ? "#a5261f" : "#f4f4f2";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = this.preview.danger ? "#a5261f" : "#ffffff";
+    ctx.beginPath();
+    ctx.moveTo(this.preview.start.x, this.preview.start.y);
+    ctx.lineTo(this.preview.end.x, this.preview.end.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawCutEffect(ctx: CanvasRenderingContext2D, time: number): void {
+    if (!this.cutEffect) return;
+    const age = time - this.cutEffect.startedAt;
+    if (age > 380) {
+      this.cutEffect = null;
+      return;
+    }
+    const fade = 1 - age / 380;
+    ctx.save();
+    ctx.globalAlpha = fade * 0.32;
+    ctx.fillStyle = "#171716";
+    ctx.beginPath();
+    this.cutEffect.removed.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+    ctx.closePath();
+    ctx.translate(0, -age * 0.018);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawDanger(ctx: CanvasRenderingContext2D, time: number): void {
+    if (!this.dangerPulse) return;
+    const age = time - this.dangerPulse.startedAt;
+    if (age > 500) {
+      this.dangerPulse = null;
+      return;
+    }
+    const radius = 12 + age * 0.07;
+    ctx.save();
+    ctx.globalAlpha = 1 - age / 500;
+    ctx.strokeStyle = "#a5261f";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(this.dangerPulse.point.x, this.dangerPulse.point.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
