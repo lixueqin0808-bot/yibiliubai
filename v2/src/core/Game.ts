@@ -5,6 +5,10 @@ import { splitPolygon } from "../geometry/cut";
 import { lineSide, pointInPolygon, polygonArea } from "../geometry/polygon";
 import { GOLDEN_LEVEL, GOLDEN_POLYGON, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
+import backgroundUrl from "../assets/xuan-paper-background.webp";
+import dangerMarkUrl from "../assets/danger-mark.webp";
+import inkBladeUrl from "../assets/ink-blade.webp";
+import inkTextureUrl from "../assets/ink-map-texture.webp";
 
 interface GameElements {
   progressText: HTMLElement;
@@ -30,6 +34,12 @@ interface InkParticle {
   velocity: Point;
   size: number;
   life: number;
+}
+
+function loadImage(source: string): HTMLImageElement {
+  const image = new Image();
+  image.src = source;
+  return image;
 }
 
 export class Game {
@@ -61,6 +71,10 @@ export class Game {
   private inputLockedUntil = 0;
   private shakeUntil = 0;
   private activePointerId: number | null = null;
+  private readonly backgroundImage = loadImage(backgroundUrl);
+  private readonly dangerMarkImage = loadImage(dangerMarkUrl);
+  private readonly inkBladeImage = loadImage(inkBladeUrl);
+  private readonly inkTextureImage = loadImage(inkTextureUrl);
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(private readonly canvas: HTMLCanvasElement, elements: GameElements) {
@@ -322,13 +336,15 @@ export class Game {
     ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
     ctx.fillStyle = "#f4f4f2";
     ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    if (this.backgroundImage.complete && this.backgroundImage.naturalWidth > 0) {
+      ctx.drawImage(this.backgroundImage, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    }
 
     ctx.save();
     if (!this.reduceMotion && time < this.shakeUntil) {
       const strength = Math.max(0, (this.shakeUntil - time) / 170) * 3.2;
       ctx.translate(Math.sin(time * 0.22) * strength, Math.cos(time * 0.31) * strength * 0.6);
     }
-    this.drawAtmosphere(ctx);
     this.drawPolygon(ctx);
     this.drawGuide(ctx, time);
     this.drawBlade(ctx, time);
@@ -338,46 +354,20 @@ export class Game {
     ctx.restore();
   }
 
-  private drawAtmosphere(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    ctx.globalAlpha = 0.055;
-    ctx.strokeStyle = "#151514";
-    ctx.lineCap = "butt";
-    ctx.lineWidth = 28;
-    ctx.beginPath();
-    ctx.moveTo(-25, 248);
-    ctx.bezierCurveTo(72, 216, 132, 260, 226, 232);
-    ctx.bezierCurveTo(300, 210, 356, 184, 424, 202);
-    ctx.stroke();
-    ctx.globalAlpha = 0.035;
-    ctx.lineWidth = 44;
-    ctx.beginPath();
-    ctx.moveTo(-35, 642);
-    ctx.bezierCurveTo(56, 606, 132, 676, 216, 630);
-    ctx.bezierCurveTo(290, 590, 350, 612, 430, 560);
-    ctx.stroke();
-    ctx.restore();
-  }
-
   private drawPolygon(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.beginPath();
     this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
-    ctx.fillStyle = "#171716";
+    ctx.fillStyle = "#0c0c0b";
     ctx.fill();
     ctx.strokeStyle = "#050505";
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.clip();
-    ctx.globalAlpha = 0.12;
-    ctx.strokeStyle = "#f4f4f2";
-    ctx.lineWidth = 1;
-    for (let y = 188; y < 710; y += 17) {
-      ctx.beginPath();
-      ctx.moveTo(36, y);
-      ctx.bezierCurveTo(120, y - 5, 270, y + 5, 354, y - 2);
-      ctx.stroke();
+    if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(this.inkTextureImage, 28, 172, 334, 548);
     }
     ctx.restore();
   }
@@ -386,9 +376,15 @@ export class Game {
     const position = this.physics.position;
     ctx.save();
     ctx.translate(position.x, position.y);
+    ctx.rotate(time * 0.004);
+    if (this.inkBladeImage.complete && this.inkBladeImage.naturalWidth > 0) {
+      const size = 46;
+      ctx.drawImage(this.inkBladeImage, -size / 2, -size / 2, size, size);
+      ctx.restore();
+      return;
+    }
     const bladeScale = GOLDEN_LEVEL.blade.radius / 18;
     ctx.scale(bladeScale, bladeScale);
-    ctx.rotate(time * 0.004);
     for (let index = 0; index < 4; index += 1) {
       ctx.rotate(Math.PI / 2);
       ctx.beginPath();
@@ -454,6 +450,11 @@ export class Game {
     this.cutEffect.removed.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
     ctx.fill();
+    if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
+      ctx.clip();
+      ctx.globalAlpha = fade * 0.5;
+      ctx.drawImage(this.inkTextureImage, 28, 172, 334, 548);
+    }
     ctx.restore();
 
     if (age < 210) {
@@ -513,6 +514,12 @@ export class Game {
     const radius = 12 + age * 0.07;
     ctx.save();
     ctx.globalAlpha = 1 - age / 500;
+    if (this.dangerMarkImage.complete && this.dangerMarkImage.naturalWidth > 0) {
+      const size = radius * 3.4;
+      ctx.drawImage(this.dangerMarkImage, this.dangerPulse.point.x - size / 2, this.dangerPulse.point.y - size / 2, size, size);
+      ctx.restore();
+      return;
+    }
     ctx.strokeStyle = "#a5261f";
     ctx.lineWidth = 4;
     ctx.beginPath();

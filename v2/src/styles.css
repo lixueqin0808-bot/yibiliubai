@@ -101,7 +101,7 @@ canvas {
 
 .progress {
   position: absolute;
-  inset: 74px 54px auto;
+  inset: 74px 74px auto;
   color: var(--ink);
   pointer-events: none;
 }
@@ -125,60 +125,33 @@ canvas {
 
 .progress-track {
   position: relative;
-  height: 7px;
-  margin-top: 2px;
+  height: 26px;
+  margin-top: -2px;
   overflow: visible;
-  border: 1px solid #74746f;
-  background: #deded8;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
-}
-
-.progress-track::after {
-  position: absolute;
-  inset: -2px 20% -2px auto;
-  width: 1px;
-  background: rgb(21 21 20 / 30%);
-  box-shadow: -51px 0 rgb(21 21 20 / 30%), -102px 0 rgb(21 21 20 / 30%), 51px 0 rgb(21 21 20 / 30%);
-  content: "";
+  background: url("./assets/bamboo-progress-rail.webp") center / 100% 100% no-repeat;
 }
 
 .progress-track i {
+  position: absolute;
+  top: 11px;
+  left: 12px;
   display: block;
   width: 0;
-  height: 100%;
-  background: #31312e;
+  height: 3px;
+  background: var(--cinnabar);
+  opacity: 0.85;
   transition: width 180ms ease-out;
 }
 
 .progress-track b {
   position: absolute;
-  top: -6px;
+  top: -8px;
   left: 50%;
   z-index: 1;
-  width: 4px;
-  height: 19px;
-  background: var(--cinnabar);
-  transform: rotate(4deg);
-}
-
-.progress-track b::before,
-.progress-track b::after {
-  position: absolute;
-  top: 7px;
-  width: 8px;
-  height: 2px;
-  background: var(--cinnabar);
-  content: "";
-}
-
-.progress-track b::before {
-  right: 1px;
-  transform: rotate(32deg);
-}
-
-.progress-track b::after {
-  left: 1px;
-  transform: rotate(-32deg);
+  width: 18px;
+  height: 41px;
+  background: url("./assets/cinnabar-knot.webp") center / contain no-repeat;
+  transform: translateX(-50%);
 }
 
 .tip {
@@ -248,15 +221,10 @@ canvas {
 }
 
 .stamp {
-  display: inline-grid;
-  min-width: 78px;
-  min-height: 78px;
-  padding: 10px;
-  place-items: center;
-  border: 3px double var(--cinnabar);
-  color: var(--cinnabar);
-  font-family: STKaiti, KaiTi, serif;
-  font-size: 18px;
+  display: inline-block;
+  width: 108px;
+  height: 110px;
+  background: url("./assets/success-stamp.webp") center / contain no-repeat;
   transform: rotate(-5deg);
 }
 
