@@ -101,7 +101,7 @@ canvas {
 
 .progress {
   position: absolute;
-  inset: 74px 74px auto;
+  inset: 74px 6% auto;
   color: var(--ink);
   pointer-events: none;
 }
