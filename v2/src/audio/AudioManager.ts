@@ -24,9 +24,9 @@ export class AudioManager {
   }
 
   playSuccess(): void {
-    this.noise(0.11, 0.04, 1800);
-    this.tone(420, 780, 0.14, 0.045, "sine", 0.025);
-    this.tone(230, 170, 0.16, 0.035, "triangle", 0.065);
+    this.noise(0.075, 0.035, 3200);
+    this.tone(1250, 360, 0.07, 0.032, "triangle");
+    this.tone(155, 92, 0.1, 0.026, "sine", 0.018);
   }
 
   playFail(): void {

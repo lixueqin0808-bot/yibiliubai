@@ -35,6 +35,12 @@ product
 4. 移动优先：竖屏触控是主要体验，电脑鼠标使用同一套规则。
 5. 轻量可嵌入：保持快速启动、稳定帧率和纯静态发布能力。
 
+## Layout Reference
+
+- Use the original iSlash as the structural reference for portrait gameplay composition: compact status at the top, the playable shape as the visual center, and secondary controls kept at the edges.
+- Rebuild all typography, icons, materials, dialogs, maps, animation, and sound in the original high-contrast ink-wash direction of Yibi Liubai.
+- Preserve generous gesture margins around the playable shape. Interface decoration must never reduce the practical cutting area.
+
 ## Accessibility & Inclusion
 
 - 关键状态不能只依赖颜色表达，危险同时使用形态、运动和声音提示。

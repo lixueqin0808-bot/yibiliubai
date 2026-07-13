@@ -20,8 +20,8 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.mouse.move(8, 300);
   await page.mouse.down();
   await page.mouse.move(382, 300, { steps: 12 });
-  await page.mouse.up();
   await expect(page.locator("#progressText")).not.toHaveText("0%");
+  await page.mouse.up();
   await page.screenshot({ path: "test-results/golden-mobile.png", fullPage: true });
 
   await page.waitForTimeout(220);
@@ -42,5 +42,10 @@ test("desktop keeps the portrait game centered without overflow", async ({ page 
   expect(box).not.toBeNull();
   expect(box!.width).toBeLessThanOrEqual(430);
   expect(Math.abs(box!.x + box!.width / 2 - 720)).toBeLessThan(2);
+  await page.mouse.move(box!.x + 4, box!.y + 312 * box!.height / 844);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width + 80, box!.y + 312 * box!.height / 844, { steps: 12 });
+  await expect(page.locator("#progressText")).not.toHaveText("0%");
+  await page.mouse.up();
   await page.screenshot({ path: "test-results/golden-desktop.png", fullPage: true });
 });

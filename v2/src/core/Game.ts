@@ -60,6 +60,7 @@ export class Game {
   private freezeUntil = 0;
   private inputLockedUntil = 0;
   private shakeUntil = 0;
+  private activePointerId: number | null = null;
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(private readonly canvas: HTMLCanvasElement, elements: GameElements) {
@@ -132,16 +133,17 @@ export class Game {
 
   private bindPointerEvents(): void {
     this.canvas.addEventListener("pointerdown", (event) => {
-      if (this.status !== "playing" || performance.now() < this.inputLockedUntil) return;
+      if (this.status !== "playing" || performance.now() < this.inputLockedUntil || this.activePointerId !== null) return;
       const point = this.pointerPosition(event);
+      this.activePointerId = event.pointerId;
       this.canvas.setPointerCapture(event.pointerId);
       this.preview = { start: point, end: point, danger: false };
       this.audio.playStart();
       event.preventDefault();
     });
 
-    this.canvas.addEventListener("pointermove", (event) => {
-      if (!this.preview || this.status !== "playing") return;
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== this.activePointerId || !this.preview || this.status !== "playing") return;
       this.preview.end = this.pointerPosition(event);
       this.preview.danger = segmentHitsCircle(
         this.preview.start,
@@ -149,41 +151,56 @@ export class Game {
         this.physics.position,
         GOLDEN_LEVEL.blade.radius + 2,
       );
-      if (this.preview.danger) this.fail(this.physics.position, this.preview.start, this.preview.end);
+      if (this.preview.danger) {
+        this.fail(this.physics.position, this.preview.start, this.preview.end);
+      } else if (this.attemptCut(this.preview.start, this.preview.end, true)) {
+        this.clearGesture();
+      }
       event.preventDefault();
-    });
+    };
 
     const finish = (event: PointerEvent) => {
-      if (!this.preview || this.status !== "playing") return;
+      if (event.pointerId !== this.activePointerId || !this.preview || this.status !== "playing") return;
       const start = this.preview.start;
       const end = this.pointerPosition(event);
-      this.preview = null;
+      this.clearGesture();
       this.attemptCut(start, end);
       event.preventDefault();
     };
-    this.canvas.addEventListener("pointerup", finish);
-    this.canvas.addEventListener("pointercancel", () => { this.preview = null; });
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", finish, { passive: false });
+    window.addEventListener("pointercancel", (event) => {
+      if (event.pointerId === this.activePointerId) this.clearGesture();
+    });
     this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   }
 
-  private attemptCut(start: Point, end: Point): void {
+  private clearGesture(): void {
+    if (this.activePointerId !== null && this.canvas.hasPointerCapture(this.activePointerId)) {
+      this.canvas.releasePointerCapture(this.activePointerId);
+    }
+    this.activePointerId = null;
+    this.preview = null;
+  }
+
+  private attemptCut(start: Point, end: Point, silent = false): boolean {
     if (segmentHitsCircle(start, end, this.physics.position, GOLDEN_LEVEL.blade.radius + 2)) {
       this.fail(this.physics.position, start, end);
-      return;
+      return false;
     }
 
     const result = splitPolygon(this.polygon, start, end);
     if (!result) {
-      this.setTip("这一笔没有切开", 1300);
-      return;
+      if (!silent) this.setTip("这一笔没有切开", 1300);
+      return false;
     }
 
     const blade = this.physics.position;
     const inPositive = pointInPolygon(blade, result.positive);
     const inNegative = pointInPolygon(blade, result.negative);
     if (inPositive === inNegative) {
-      this.setTip("墨刃位置不明", 1300);
-      return;
+      if (!silent) this.setTip("墨刃位置不明", 1300);
+      return false;
     }
 
     const kept = inPositive ? result.positive : result.negative;
@@ -228,12 +245,13 @@ export class Game {
     this.updateProgress();
     if (this.clearedRatio >= GOLDEN_LEVEL.target) this.complete();
     else this.setTip("很好，继续留白", 1100);
+    return true;
   }
 
   private fail(point: Point, lineStart?: Point, lineEnd?: Point): void {
     if (this.status !== "playing") return;
     this.status = "failed";
-    this.preview = null;
+    this.clearGesture();
     const now = performance.now();
     this.dangerPulse = { point: { ...point }, startedAt: now };
     this.dangerLine = lineStart && lineEnd ? { start: { ...lineStart }, end: { ...lineEnd }, startedAt: now } : null;
@@ -368,6 +386,8 @@ export class Game {
     const position = this.physics.position;
     ctx.save();
     ctx.translate(position.x, position.y);
+    const bladeScale = GOLDEN_LEVEL.blade.radius / 18;
+    ctx.scale(bladeScale, bladeScale);
     ctx.rotate(time * 0.004);
     for (let index = 0; index < 4; index += 1) {
       ctx.rotate(Math.PI / 2);
