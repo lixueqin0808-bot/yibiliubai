@@ -17,16 +17,17 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   });
   expect(nonPaperPixels).toBeGreaterThan(1000);
 
-  await page.mouse.move(42, 300);
+  await page.mouse.move(8, 300);
   await page.mouse.down();
-  await page.mouse.move(352, 300, { steps: 12 });
+  await page.mouse.move(382, 300, { steps: 12 });
   await page.mouse.up();
   await expect(page.locator("#progressText")).not.toHaveText("0%");
   await page.screenshot({ path: "test-results/golden-mobile.png", fullPage: true });
 
-  await page.mouse.move(40, 440);
+  await page.waitForTimeout(220);
+  await page.mouse.move(8, 440);
   await page.mouse.down();
-  await page.mouse.move(350, 440, { steps: 12 });
+  await page.mouse.move(382, 440, { steps: 12 });
   await page.mouse.up();
   await expect(page.locator("#resultDialog")).toBeVisible();
   await expect(page.locator("#resultMeta")).toContainText("2 笔");

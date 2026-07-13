@@ -2,7 +2,7 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
-import { distanceToPolygonEdge, pointInPolygon, polygonArea } from "../geometry/polygon";
+import { lineSide, pointInPolygon, polygonArea } from "../geometry/polygon";
 import { GOLDEN_LEVEL, GOLDEN_POLYGON, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 
@@ -21,6 +21,15 @@ interface CutEffect {
   lineEnd: Point;
   removed: Polygon;
   startedAt: number;
+  normal: Point;
+  particles: InkParticle[];
+}
+
+interface InkParticle {
+  origin: Point;
+  velocity: Point;
+  size: number;
+  life: number;
 }
 
 export class Game {
@@ -44,9 +53,14 @@ export class Game {
   private effectiveCuts = 0;
   private cutEffect: CutEffect | null = null;
   private dangerPulse: { point: Point; startedAt: number } | null = null;
+  private dangerLine: { start: Point; end: Point; startedAt: number } | null = null;
   private tipTimeout = 0;
   private readonly audio = new AudioManager();
   private lastBladePosition: Point = { ...GOLDEN_LEVEL.blade };
+  private freezeUntil = 0;
+  private inputLockedUntil = 0;
+  private shakeUntil = 0;
+  private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(private readonly canvas: HTMLCanvasElement, elements: GameElements) {
     const context = canvas.getContext("2d");
@@ -66,6 +80,10 @@ export class Game {
     this.preview = null;
     this.cutEffect = null;
     this.dangerPulse = null;
+    this.dangerLine = null;
+    this.freezeUntil = 0;
+    this.inputLockedUntil = 0;
+    this.shakeUntil = 0;
     this.startTime = performance.now();
     this.pausedDuration = 0;
     this.effectiveCuts = 0;
@@ -114,12 +132,8 @@ export class Game {
 
   private bindPointerEvents(): void {
     this.canvas.addEventListener("pointerdown", (event) => {
-      if (this.status !== "playing") return;
+      if (this.status !== "playing" || performance.now() < this.inputLockedUntil) return;
       const point = this.pointerPosition(event);
-      if (distanceToPolygonEdge(point, this.polygon) > 24) {
-        this.setTip("请从画卷边缘起笔", 1300);
-        return;
-      }
       this.canvas.setPointerCapture(event.pointerId);
       this.preview = { start: point, end: point, danger: false };
       this.audio.playStart();
@@ -135,7 +149,7 @@ export class Game {
         this.physics.position,
         GOLDEN_LEVEL.blade.radius + 2,
       );
-      if (this.preview.danger) this.fail(this.physics.position);
+      if (this.preview.danger) this.fail(this.physics.position, this.preview.start, this.preview.end);
       event.preventDefault();
     });
 
@@ -153,12 +167,8 @@ export class Game {
   }
 
   private attemptCut(start: Point, end: Point): void {
-    if (distanceToPolygonEdge(end, this.polygon) > 24) {
-      this.setTip("要划到另一侧边缘", 1300);
-      return;
-    }
     if (segmentHitsCircle(start, end, this.physics.position, GOLDEN_LEVEL.blade.radius + 2)) {
-      this.fail(this.physics.position);
+      this.fail(this.physics.position, start, end);
       return;
     }
 
@@ -181,19 +191,55 @@ export class Game {
     this.polygon = kept;
     this.physics.setBoundary(this.polygon);
     this.effectiveCuts += 1;
-    this.cutEffect = { lineStart: start, lineEnd: end, removed, startedAt: performance.now() };
+    const now = performance.now();
+    const cutStart = result.intersections[0];
+    const cutEnd = result.intersections[1];
+    const removedCenter = this.polygonCentroid(removed);
+    const length = Math.max(1, Math.hypot(cutEnd.x - cutStart.x, cutEnd.y - cutStart.y));
+    const direction = { x: (cutEnd.x - cutStart.x) / length, y: (cutEnd.y - cutStart.y) / length };
+    const side = Math.sign(lineSide(cutStart, cutEnd, removedCenter)) || 1;
+    const normal = { x: -direction.y * side, y: direction.x * side };
+    const particles: InkParticle[] = Array.from({ length: this.reduceMotion ? 8 : 30 }, () => {
+      const along = Math.random();
+      const speed = 0.035 + Math.random() * 0.105;
+      const scatter = (Math.random() - 0.5) * 0.08;
+      return {
+        origin: {
+          x: cutStart.x + (cutEnd.x - cutStart.x) * along + normal.x * (Math.random() * 5),
+          y: cutStart.y + (cutEnd.y - cutStart.y) * along + normal.y * (Math.random() * 5),
+        },
+        velocity: {
+          x: normal.x * speed + direction.x * scatter,
+          y: normal.y * speed + direction.y * scatter,
+        },
+        size: 1.5 + Math.random() * 4.5,
+        life: 340 + Math.random() * 260,
+      };
+    });
+    this.cutEffect = { lineStart: cutStart, lineEnd: cutEnd, removed, startedAt: now, normal, particles };
+    this.freezeUntil = now + 55;
+    this.inputLockedUntil = now + 180;
+    this.shakeUntil = now + 170;
     this.audio.playSuccess();
+    if (navigator.vibrate) navigator.vibrate(12);
+    this.elements.progressText.classList.remove("impact");
+    requestAnimationFrame(() => this.elements.progressText.classList.add("impact"));
+    window.setTimeout(() => this.elements.progressText.classList.remove("impact"), 280);
     this.updateProgress();
     if (this.clearedRatio >= GOLDEN_LEVEL.target) this.complete();
     else this.setTip("很好，继续留白", 1100);
   }
 
-  private fail(point: Point): void {
+  private fail(point: Point, lineStart?: Point, lineEnd?: Point): void {
     if (this.status !== "playing") return;
     this.status = "failed";
     this.preview = null;
-    this.dangerPulse = { point: { ...point }, startedAt: performance.now() };
-    this.setTip("笔锋碰到墨刃", 500);
+    const now = performance.now();
+    this.dangerPulse = { point: { ...point }, startedAt: now };
+    this.dangerLine = lineStart && lineEnd ? { start: { ...lineStart }, end: { ...lineEnd }, startedAt: now } : null;
+    this.freezeUntil = now + 65;
+    this.shakeUntil = now + 190;
+    this.setTip("切线碰到墨刃，重试", 520);
     this.audio.playFail();
     if (navigator.vibrate) navigator.vibrate(24);
     window.setTimeout(() => this.restart(), 520);
@@ -238,7 +284,7 @@ export class Game {
   private frame(time: number): void {
     const delta = time - this.lastFrame;
     this.lastFrame = time;
-    if (this.status === "playing") {
+    if (this.status === "playing" && time >= this.freezeUntil) {
       this.lastBladePosition = this.physics.position;
       this.physics.update(delta);
       if (this.preview && sweptCircleHitsSegment(
@@ -247,7 +293,7 @@ export class Game {
         GOLDEN_LEVEL.blade.radius + 2,
         this.preview.start,
         this.preview.end,
-      )) this.fail(this.physics.position);
+      )) this.fail(this.physics.position, this.preview.start, this.preview.end);
     }
     this.draw(time);
     requestAnimationFrame((nextTime) => this.frame(nextTime));
@@ -259,6 +305,11 @@ export class Game {
     ctx.fillStyle = "#f4f4f2";
     ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
+    ctx.save();
+    if (!this.reduceMotion && time < this.shakeUntil) {
+      const strength = Math.max(0, (this.shakeUntil - time) / 170) * 3.2;
+      ctx.translate(Math.sin(time * 0.22) * strength, Math.cos(time * 0.31) * strength * 0.6);
+    }
     this.drawAtmosphere(ctx);
     this.drawPolygon(ctx);
     this.drawGuide(ctx, time);
@@ -266,6 +317,7 @@ export class Game {
     this.drawCutEffect(ctx, time);
     this.drawPreview(ctx);
     this.drawDanger(ctx, time);
+    ctx.restore();
   }
 
   private drawAtmosphere(ctx: CanvasRenderingContext2D): void {
@@ -368,23 +420,70 @@ export class Game {
   private drawCutEffect(ctx: CanvasRenderingContext2D, time: number): void {
     if (!this.cutEffect) return;
     const age = time - this.cutEffect.startedAt;
-    if (age > 380) {
+    if (age > 650) {
       this.cutEffect = null;
       return;
     }
-    const fade = 1 - age / 380;
+    const fade = Math.max(0, 1 - age / 520);
+    const offset = Math.min(13, age * 0.032);
     ctx.save();
-    ctx.globalAlpha = fade * 0.32;
+    ctx.translate(this.cutEffect.normal.x * offset, this.cutEffect.normal.y * offset);
+    ctx.globalAlpha = fade * 0.5;
     ctx.fillStyle = "#171716";
     ctx.beginPath();
     this.cutEffect.removed.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
-    ctx.translate(0, -age * 0.018);
     ctx.fill();
+    ctx.restore();
+
+    if (age < 210) {
+      ctx.save();
+      ctx.globalAlpha = 1 - age / 210;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 6 - age / 50;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(this.cutEffect.lineStart.x, this.cutEffect.lineStart.y);
+      ctx.lineTo(this.cutEffect.lineEnd.x, this.cutEffect.lineEnd.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.fillStyle = "#171716";
+    for (const particle of this.cutEffect.particles) {
+      if (age > particle.life) continue;
+      const progress = age / particle.life;
+      const x = particle.origin.x + particle.velocity.x * age;
+      const y = particle.origin.y + particle.velocity.y * age + progress * progress * 13;
+      ctx.globalAlpha = (1 - progress) * 0.72;
+      ctx.beginPath();
+      ctx.ellipse(x, y, particle.size * (1 - progress * 0.35), particle.size * 0.55, progress * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
   private drawDanger(ctx: CanvasRenderingContext2D, time: number): void {
+    if (this.dangerLine) {
+      const lineAge = time - this.dangerLine.startedAt;
+      if (lineAge <= 460) {
+        ctx.save();
+        ctx.globalAlpha = 1 - lineAge / 460;
+        ctx.strokeStyle = "#a5261f";
+        ctx.lineWidth = 5;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#a5261f";
+        ctx.beginPath();
+        ctx.moveTo(this.dangerLine.start.x, this.dangerLine.start.y);
+        ctx.lineTo(this.dangerLine.end.x, this.dangerLine.end.y);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        this.dangerLine = null;
+      }
+    }
     if (!this.dangerPulse) return;
     const age = time - this.dangerPulse.startedAt;
     if (age > 500) {
@@ -400,5 +499,10 @@ export class Game {
     ctx.arc(this.dangerPulse.point.x, this.dangerPulse.point.y, radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
+  }
+
+  private polygonCentroid(polygon: Polygon): Point {
+    const total = polygon.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
+    return { x: total.x / polygon.length, y: total.y / polygon.length };
   }
 }

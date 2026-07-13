@@ -120,6 +120,11 @@ canvas {
 
 .progress-copy strong {
   font-size: 20px;
+  transform-origin: left center;
+}
+
+.progress-copy strong.impact {
+  animation: progress-impact 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .progress-copy .target {
@@ -235,6 +240,12 @@ canvas {
   color: var(--cinnabar);
   font-size: 25px;
   letter-spacing: 4px;
+}
+
+@keyframes progress-impact {
+  0% { color: var(--cinnabar); transform: scale(1); }
+  42% { color: var(--cinnabar); transform: scale(1.42); }
+  100% { color: var(--ink); transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
