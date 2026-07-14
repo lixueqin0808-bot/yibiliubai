@@ -2,7 +2,7 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
-import { lineSide, pointInPolygon, polygonArea, segmentIntersection } from "../geometry/polygon";
+import { distanceToSegment, lineSide, pointInPolygon, polygonArea } from "../geometry/polygon";
 import { LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
@@ -201,10 +201,6 @@ export class Game {
   }
 
   private attemptCut(start: Point, end: Point, silent = false): boolean {
-    if (this.level.metalSegments?.some((metal) => segmentIntersection(start, end, metal.start, metal.end))) {
-      if (!silent) this.showInvalidCut(start, end);
-      return false;
-    }
     const hitBlade = this.physics.find((blade, index) => segmentHitsCircle(
       start,
       end,
@@ -218,6 +214,13 @@ export class Game {
 
     const result = splitPolygon(this.polygon, start, end);
     if (!result) {
+      if (!silent) this.showInvalidCut(start, end);
+      return false;
+    }
+
+    if (this.level.metalSegments?.some((metal) => result.intersections.some(
+      (intersection) => distanceToSegment(intersection, metal.start, metal.end) <= 9,
+    ))) {
       if (!silent) this.showInvalidCut(start, end);
       return false;
     }
@@ -434,20 +437,20 @@ export class Game {
     if (!this.level.metalSegments) return;
     ctx.save();
     ctx.lineCap = "round";
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = "#777773";
-    ctx.shadowBlur = 4;
+    ctx.lineWidth = 12;
+    ctx.strokeStyle = "#353535";
+    ctx.shadowBlur = 5;
     ctx.shadowColor = "#050505";
     this.level.metalSegments.forEach((metal) => {
       ctx.beginPath();
       ctx.moveTo(metal.start.x, metal.start.y);
       ctx.lineTo(metal.end.x, metal.end.y);
       ctx.stroke();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#c2c2bb";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#aaa9a1";
       ctx.stroke();
-      ctx.lineWidth = 8;
-      ctx.strokeStyle = "#777773";
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = "#353535";
     });
     ctx.restore();
   }

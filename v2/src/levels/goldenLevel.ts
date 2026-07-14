@@ -64,8 +64,8 @@ export const LEVELS: LevelDefinition[] = [
     ],
     blades: [{ x: 205, y: 467, radius: 12, speed: 2.7, velocity: { x: -2.18, y: 1.59 } }],
     metalSegments: [
-      { start: { x: 112, y: 384 }, end: { x: 181, y: 349 } },
-      { start: { x: 221, y: 508 }, end: { x: 280, y: 545 } },
+      { start: { x: 91, y: 408 }, end: { x: 87, y: 438 } },
+      { start: { x: 303, y: 414 }, end: { x: 300, y: 446 } },
     ],
   },
   {
@@ -80,7 +80,7 @@ export const LEVELS: LevelDefinition[] = [
       { x: 168, y: 411, radius: 12, speed: 2.85, velocity: { x: 2.31, y: 1.66 } },
       { x: 243, y: 521, radius: 11, speed: 2.52, velocity: { x: -1.83, y: 1.73 } },
     ],
-    metalSegments: [{ start: { x: 140, y: 538 }, end: { x: 208, y: 574 } }],
+    metalSegments: [{ start: { x: 99, y: 509 }, end: { x: 95, y: 535 } }],
   },
 ];
 
