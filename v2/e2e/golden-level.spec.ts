@@ -3,6 +3,10 @@ import { expect, test } from "@playwright/test";
 test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await expect(page.locator("#startScreen")).toBeVisible();
+  await page.screenshot({ path: "test-results/start-screen.png", fullPage: true });
+  await page.locator("#startGame").click();
+  await expect(page.locator("#startScreen")).toBeHidden();
   await expect(page.locator(".life-dot")).toHaveCount(3);
   await expect(page.locator("#settingsMenu")).toBeHidden();
   await page.locator("#settings").click();
@@ -44,6 +48,7 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
 test("desktop keeps the portrait game centered without overflow", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await page.locator("#startGame").click();
   const shell = page.locator(".game-shell");
   const box = await shell.boundingBox();
   expect(box).not.toBeNull();

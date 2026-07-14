@@ -20,6 +20,11 @@ interface GameElements {
   resultDialog: HTMLDialogElement;
 }
 
+interface GameCallbacks {
+  onLevelStart?: (levelId: number) => void;
+  onLevelComplete?: (levelId: number) => void;
+}
+
 interface CutEffect {
   lineStart: Point;
   lineEnd: Point;
@@ -52,7 +57,7 @@ export class Game {
   private initialArea = polygonArea(this.level.polygon);
   private physics = this.createPhysics(this.level);
   private preview: CutPreview | null = null;
-  private status: GameStatus = "playing";
+  private status: GameStatus = "paused";
   private lastFrame = performance.now();
   private effectiveCuts = 0;
   private lives = ROUND_LIVES;
@@ -74,7 +79,11 @@ export class Game {
   private readonly inkTextureImage = loadImage(inkTextureUrl);
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  constructor(private readonly canvas: HTMLCanvasElement, elements: GameElements) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    elements: GameElements,
+    private readonly callbacks: GameCallbacks = {},
+  ) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas 2D is unavailable");
     this.context = context;
@@ -87,6 +96,19 @@ export class Game {
 
   restart(): void {
     this.loadLevel(this.levelIndex);
+  }
+
+  startLevel(levelId: number): void {
+    const index = LEVELS.findIndex((level) => level.id === levelId);
+    if (index >= 0) this.loadLevel(index);
+  }
+
+  get currentLevelId(): number {
+    return this.level.id;
+  }
+
+  get isLastLevel(): boolean {
+    return this.levelIndex === LEVELS.length - 1;
   }
 
   nextLevel(): void {
@@ -113,6 +135,7 @@ export class Game {
     this.lives = ROUND_LIVES;
     this.invalidLine = null;
     this.updateHud();
+    this.callbacks.onLevelStart?.(this.level.id);
     if (this.elements.pauseDialog.open) this.elements.pauseDialog.close();
     if (this.elements.resultDialog.open) this.elements.resultDialog.close();
   }
@@ -307,6 +330,7 @@ export class Game {
   private complete(): void {
     this.status = "completed";
     this.audio.playComplete();
+    this.callbacks.onLevelComplete?.(this.level.id);
     window.setTimeout(() => this.elements.resultDialog.showModal(), 360);
   }
 

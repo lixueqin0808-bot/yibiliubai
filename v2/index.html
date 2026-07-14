@@ -10,6 +10,17 @@
     <main class="game-shell" aria-label="一笔留白游戏">
       <canvas id="game" width="390" height="844" aria-label="水墨切割游戏画面"></canvas>
 
+      <section id="startScreen" class="start-screen" aria-label="开始界面">
+        <div class="start-mark" aria-hidden="true"></div>
+        <p class="start-kicker">一卷未竟之墨</p>
+        <h1>一笔留白</h1>
+        <p class="start-copy">落笔成界，留墨避锋</p>
+        <div class="start-actions">
+          <button id="startGame" class="ink-command" type="button">入画</button>
+          <button id="openTutorial" class="quiet-command" type="button">玩法</button>
+        </div>
+      </section>
+
       <section class="progress" aria-label="剩余留白">
         <div class="progress-rail" aria-hidden="true">
           <span class="progress-track"></span>
@@ -26,6 +37,7 @@
         <div class="settings-wrap">
           <div id="settingsMenu" class="settings-menu" hidden>
             <button id="sound" class="corner-button" type="button" aria-label="关闭音乐" title="关闭音乐" aria-pressed="true">♪</button>
+            <button id="openLevels" class="corner-button" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
           </div>
           <button id="settings" class="corner-button" type="button" aria-label="设置" title="设置">⋮</button>
         </div>
@@ -39,8 +51,25 @@
         </div>
       </dialog>
 
+      <dialog id="tutorialDialog" class="dialog tutorial-dialog">
+        <p class="dialog-eyebrow">入画要诀</p>
+        <div class="tutorial-steps">
+          <p><b>一</b> 从墨板外起笔，穿过边界。</p>
+          <p><b>二</b> 留住所有墨轮，切去空白。</p>
+          <p><b>三</b> 墨铁封边不可落笔。</p>
+        </div>
+        <button id="closeTutorial" class="ink-command" type="button">明白</button>
+      </dialog>
+
+      <dialog id="levelDialog" class="dialog level-dialog">
+        <p class="dialog-eyebrow">五幅墨境</p>
+        <div id="levelGrid" class="level-grid" aria-label="关卡选择"></div>
+        <button id="closeLevels" class="quiet-command" type="button">返回</button>
+      </dialog>
+
       <dialog id="resultDialog" class="dialog result-dialog">
         <span class="stamp" aria-label="留白已成"></span>
+        <p id="resultLabel" class="result-label">此幅已成</p>
         <div class="dialog-actions icon-actions">
           <button id="resultLevels" class="menu-action" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
           <button id="again" class="menu-action" type="button" aria-label="重玩" title="重玩">↻</button>
