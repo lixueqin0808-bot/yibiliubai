@@ -291,7 +291,8 @@ export class Game {
   }
 
   private updateHud(): void {
-    this.elements.progressFill.style.transform = `scaleX(${this.remainingAreaRatio})`;
+    const hiddenPercent = Math.max(0, 100 - this.remainingAreaRatio * 100);
+    this.elements.progressFill.style.clipPath = `inset(0 ${hiddenPercent}% 0 0)`;
     this.elements.lifeLeaves.forEach((leaf, index) => {
       leaf.classList.toggle("is-spent", index >= this.lives);
     });

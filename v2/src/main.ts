@@ -10,7 +10,7 @@ function required<T extends Element>(selector: string): T {
 const canvas = required<HTMLCanvasElement>("#game");
 const game = new Game(canvas, {
   progressFill: required("#progressFill"),
-  lifeLeaves: Array.from(document.querySelectorAll<HTMLElement>(".life-leaf")),
+  lifeLeaves: Array.from(document.querySelectorAll<HTMLElement>(".life-dot")),
   pauseDialog: required("#pauseDialog"),
   resultDialog: required("#resultDialog"),
 });

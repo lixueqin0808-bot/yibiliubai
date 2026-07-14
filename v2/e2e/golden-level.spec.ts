@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await expect(page.locator(".life-leaf")).toHaveCount(3);
+  await expect(page.locator(".life-dot")).toHaveCount(3);
   await expect(page.locator("#settingsMenu")).toBeHidden();
   await page.locator("#settings").click();
   await expect(page.locator("#settingsMenu")).toBeVisible();
@@ -25,7 +25,7 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.mouse.move(8, 300);
   await page.mouse.down();
   await page.mouse.move(382, 300, { steps: 12 });
-  await expect.poll(() => page.locator("#progressFill").evaluate((element) => element.style.transform)).not.toBe("scaleX(1)");
+  await expect.poll(() => page.locator("#progressFill").evaluate((element) => element.style.clipPath)).not.toBe("inset(0px 0% 0px 0px)");
   await page.mouse.up();
   await page.screenshot({ path: "test-results/golden-mobile.png", fullPage: true });
 
@@ -50,7 +50,7 @@ test("desktop keeps the portrait game centered without overflow", async ({ page 
   await page.mouse.move(box!.x + 4, box!.y + 312 * box!.height / 844);
   await page.mouse.down();
   await page.mouse.move(box!.x + box!.width + 80, box!.y + 312 * box!.height / 844, { steps: 12 });
-  await expect.poll(() => page.locator("#progressFill").evaluate((element) => element.style.transform)).not.toBe("scaleX(1)");
+  await expect.poll(() => page.locator("#progressFill").evaluate((element) => element.style.clipPath)).not.toBe("inset(0px 0% 0px 0px)");
   await page.mouse.up();
   await page.screenshot({ path: "test-results/golden-desktop.png", fullPage: true });
 });
