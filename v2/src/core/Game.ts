@@ -2,8 +2,8 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
-import { lineSide, pointInPolygon, polygonArea } from "../geometry/polygon";
-import { GOLDEN_LEVEL, GOLDEN_POLYGON, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "../levels/goldenLevel";
+import { lineSide, pointInPolygon, polygonArea, segmentIntersection } from "../geometry/polygon";
+import { LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
 import backgroundUrl from "../assets/xuan-paper-background.webp";
@@ -44,15 +44,11 @@ function loadImage(source: string): HTMLImageElement {
 export class Game {
   private readonly context: CanvasRenderingContext2D;
   private readonly elements: GameElements;
-  private polygon: Polygon = structuredClone(GOLDEN_POLYGON);
-  private readonly initialArea = polygonArea(GOLDEN_POLYGON);
-  private physics = new PhysicsWorld(
-    this.polygon,
-    GOLDEN_LEVEL.blade,
-    GOLDEN_LEVEL.blade.radius,
-    GOLDEN_LEVEL.blade.velocity,
-    GOLDEN_LEVEL.blade.speed,
-  );
+  private levelIndex = 0;
+  private level: LevelDefinition = LEVELS[0];
+  private polygon: Polygon = structuredClone(this.level.polygon);
+  private initialArea = polygonArea(this.level.polygon);
+  private physics = this.createPhysics(this.level);
   private preview: CutPreview | null = null;
   private status: GameStatus = "playing";
   private lastFrame = performance.now();
@@ -63,7 +59,7 @@ export class Game {
   private dangerLine: { start: Point; end: Point; startedAt: number } | null = null;
   private invalidLine: { start: Point; end: Point; startedAt: number } | null = null;
   private readonly audio = new AudioManager();
-  private lastBladePosition: Point = { ...GOLDEN_LEVEL.blade };
+  private lastBladePositions: Point[] = this.physics.map((blade) => blade.position);
   private freezeUntil = 0;
   private inputLockedUntil = 0;
   private shakeUntil = 0;
@@ -86,8 +82,21 @@ export class Game {
   }
 
   restart(): void {
-    this.polygon = structuredClone(GOLDEN_POLYGON);
-    this.physics.reset(GOLDEN_LEVEL.blade, GOLDEN_LEVEL.blade.velocity, this.polygon);
+    this.loadLevel(this.levelIndex);
+  }
+
+  nextLevel(): void {
+    this.loadLevel((this.levelIndex + 1) % LEVELS.length);
+  }
+
+  private loadLevel(index: number): void {
+    this.levelIndex = index;
+    this.level = LEVELS[index];
+    this.canvas.dataset.level = String(this.level.id);
+    this.polygon = structuredClone(this.level.polygon);
+    this.initialArea = polygonArea(this.level.polygon);
+    this.physics = this.createPhysics(this.level);
+    this.lastBladePositions = this.physics.map((blade) => blade.position);
     this.status = "playing";
     this.preview = null;
     this.cutEffect = null;
@@ -153,14 +162,14 @@ export class Game {
     const move = (event: PointerEvent) => {
       if (event.pointerId !== this.activePointerId || !this.preview || this.status !== "playing") return;
       this.preview.end = this.pointerPosition(event);
-      this.preview.danger = segmentHitsCircle(
-        this.preview.start,
-        this.preview.end,
-        this.physics.position,
-        GOLDEN_LEVEL.blade.radius + 2,
-      );
+      this.preview.danger = this.physics.some((blade, index) => segmentHitsCircle(
+        this.preview!.start,
+        this.preview!.end,
+        blade.position,
+        this.level.blades[index].radius + 2,
+      ));
       if (this.preview.danger) {
-        this.handleBladeHit(this.physics.position, this.preview.start, this.preview.end);
+        this.handleBladeHit(this.dangerBladePosition(this.preview.start, this.preview.end), this.preview.start, this.preview.end);
       } else if (this.attemptCut(this.preview.start, this.preview.end, true)) {
         this.clearGesture();
       }
@@ -192,8 +201,18 @@ export class Game {
   }
 
   private attemptCut(start: Point, end: Point, silent = false): boolean {
-    if (segmentHitsCircle(start, end, this.physics.position, GOLDEN_LEVEL.blade.radius + 2)) {
-      this.handleBladeHit(this.physics.position, start, end);
+    if (this.level.metalSegments?.some((metal) => segmentIntersection(start, end, metal.start, metal.end))) {
+      if (!silent) this.showInvalidCut(start, end);
+      return false;
+    }
+    const hitBlade = this.physics.find((blade, index) => segmentHitsCircle(
+      start,
+      end,
+      blade.position,
+      this.level.blades[index].radius + 2,
+    ));
+    if (hitBlade) {
+      this.handleBladeHit(hitBlade.position, start, end);
       return false;
     }
 
@@ -203,18 +222,16 @@ export class Game {
       return false;
     }
 
-    const blade = this.physics.position;
-    const inPositive = pointInPolygon(blade, result.positive);
-    const inNegative = pointInPolygon(blade, result.negative);
-    if (inPositive === inNegative) {
+    const bladeSides = this.physics.map((blade) => pointInPolygon(blade.position, result.positive));
+    if (bladeSides.some((side) => side !== bladeSides[0])) {
       if (!silent) this.showInvalidCut(start, end);
       return false;
     }
 
-    const kept = inPositive ? result.positive : result.negative;
-    const removed = inPositive ? result.negative : result.positive;
+    const kept = bladeSides[0] ? result.positive : result.negative;
+    const removed = bladeSides[0] ? result.negative : result.positive;
     this.polygon = kept;
-    this.physics.setBoundary(this.polygon);
+    this.physics.forEach((blade) => blade.setBoundary(this.polygon));
     this.effectiveCuts += 1;
     const now = performance.now();
     const cutStart = result.intersections[0];
@@ -256,7 +273,7 @@ export class Game {
     this.audio.playSuccess();
     if (navigator.vibrate) navigator.vibrate(12);
     this.updateHud();
-    if (this.remainingAreaRatio <= GOLDEN_LEVEL.target) this.complete();
+    if (this.remainingAreaRatio <= this.level.target) this.complete();
     return true;
   }
 
@@ -307,15 +324,19 @@ export class Game {
     const delta = time - this.lastFrame;
     this.lastFrame = time;
     if (this.status === "playing" && time >= this.freezeUntil) {
-      this.lastBladePosition = this.physics.position;
-      this.physics.update(delta);
-      if (this.preview && sweptCircleHitsSegment(
-        this.lastBladePosition,
-        this.physics.position,
-        GOLDEN_LEVEL.blade.radius + 2,
-        this.preview.start,
-        this.preview.end,
-      )) this.handleBladeHit(this.physics.position, this.preview.start, this.preview.end);
+      this.physics.forEach((blade, index) => {
+        const lastPosition = blade.position;
+        blade.update(delta);
+        this.lastBladePositions[index] = blade.position;
+        if (this.preview && sweptCircleHitsSegment(
+          lastPosition,
+          blade.position,
+          this.level.blades[index].radius + 2,
+          this.preview.start,
+          this.preview.end,
+        )) this.handleBladeHit(blade.position, this.preview.start, this.preview.end);
+        blade.update(delta);
+      });
     }
     this.draw(time);
     requestAnimationFrame((nextTime) => this.frame(nextTime));
@@ -336,8 +357,9 @@ export class Game {
       ctx.translate(Math.sin(time * 0.22) * strength, Math.cos(time * 0.31) * strength * 0.6);
     }
     this.drawPolygon(ctx);
+    this.drawMetalSegments(ctx);
     this.drawGuide(ctx, time);
-    this.drawBlade(ctx, time);
+    this.physics.forEach((blade, index) => this.drawBlade(ctx, time, blade.position, index));
     this.drawCutEffect(ctx, time);
     this.drawPreview(ctx);
     this.drawInvalidCut(ctx, time);
@@ -363,18 +385,17 @@ export class Game {
     ctx.restore();
   }
 
-  private drawBlade(ctx: CanvasRenderingContext2D, time: number): void {
-    const position = this.physics.position;
+  private drawBlade(ctx: CanvasRenderingContext2D, time: number, position: Point, index: number): void {
     ctx.save();
     ctx.translate(position.x, position.y);
-    ctx.rotate(time * 0.004);
+    ctx.rotate(time * (0.004 + index * 0.0007));
     if (this.inkBladeImage.complete && this.inkBladeImage.naturalWidth > 0) {
-      const size = 40;
+      const size = index === 0 ? 40 : 36;
       ctx.drawImage(this.inkBladeImage, -size / 2, -size / 2, size, size);
       ctx.restore();
       return;
     }
-    const bladeScale = GOLDEN_LEVEL.blade.radius / 18;
+    const bladeScale = this.level.blades[index].radius / 18;
     ctx.scale(bladeScale, bladeScale);
     for (let index = 0; index < 4; index += 1) {
       ctx.rotate(Math.PI / 2);
@@ -394,8 +415,8 @@ export class Game {
   }
 
   private drawGuide(ctx: CanvasRenderingContext2D, time: number): void {
-    if (this.effectiveCuts > 0 || this.preview) return;
-    const { start, end } = GOLDEN_LEVEL.guide;
+    if (this.effectiveCuts > 0 || this.preview || !this.level.guide) return;
+    const { start, end } = this.level.guide;
     const pulse = 0.35 + Math.sin(time * 0.004) * 0.15;
     ctx.save();
     ctx.setLineDash([7, 8]);
@@ -406,6 +427,28 @@ export class Game {
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
     ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawMetalSegments(ctx: CanvasRenderingContext2D): void {
+    if (!this.level.metalSegments) return;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "#777773";
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = "#050505";
+    this.level.metalSegments.forEach((metal) => {
+      ctx.beginPath();
+      ctx.moveTo(metal.start.x, metal.start.y);
+      ctx.lineTo(metal.end.x, metal.end.y);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#c2c2bb";
+      ctx.stroke();
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = "#777773";
+    });
     ctx.restore();
   }
 
@@ -543,5 +586,25 @@ export class Game {
   private polygonCentroid(polygon: Polygon): Point {
     const total = polygon.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
     return { x: total.x / polygon.length, y: total.y / polygon.length };
+  }
+
+  private createPhysics(level: LevelDefinition): PhysicsWorld[] {
+    return level.blades.map((blade) => new PhysicsWorld(
+      this.polygon,
+      blade,
+      blade.radius,
+      blade.velocity,
+      blade.speed,
+    ));
+  }
+
+  private dangerBladePosition(start: Point, end: Point): Point {
+    const hit = this.physics.find((blade, index) => segmentHitsCircle(
+      start,
+      end,
+      blade.position,
+      this.level.blades[index].radius + 2,
+    ));
+    return hit?.position ?? this.physics[0].position;
   }
 }

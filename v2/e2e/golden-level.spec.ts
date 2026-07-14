@@ -36,6 +36,8 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.mouse.up();
   await expect(page.locator("#resultDialog")).toBeVisible();
   await expect(page.locator("#nextLevel")).toBeVisible();
+  await page.locator("#nextLevel").click();
+  await expect(page.locator("#game")).toHaveAttribute("data-level", "2");
   await page.screenshot({ path: "test-results/golden-result.png", fullPage: true });
 });
 

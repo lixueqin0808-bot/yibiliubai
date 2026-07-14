@@ -1,66 +1,133 @@
-import Matter from "matter-js";
 import type { Point, Polygon } from "../core/types";
+import { distanceToSegment, pointInPolygon } from "../geometry/polygon";
 
-const { Bodies, Body, Composite, Engine } = Matter;
+const FRAME_MS = 1000 / 60;
 
+function normalize(vector: Point): Point {
+  const length = Math.hypot(vector.x, vector.y) || 1;
+  return { x: vector.x / length, y: vector.y / length };
+}
+
+function closestEdge(point: Point, polygon: Polygon): { start: Point; end: Point } {
+  let closest = { start: polygon[0], end: polygon[1] };
+  let distance = Number.POSITIVE_INFINITY;
+  polygon.forEach((start, index) => {
+    const end = polygon[(index + 1) % polygon.length];
+    const nextDistance = distanceToSegment(point, start, end);
+    if (nextDistance < distance) {
+      distance = nextDistance;
+      closest = { start, end };
+    }
+  });
+  return closest;
+}
+
+/**
+ * Deterministic arcade motion: blades reflect from the map boundary instead of
+ * inheriting rigid-body friction that makes them appear to roll along an edge.
+ */
 export class PhysicsWorld {
-  private readonly engine = Engine.create({ gravity: { x: 0, y: 0 } });
-  private readonly blade: Matter.Body;
-  private boundaries: Matter.Body[] = [];
-  private readonly targetSpeed: number;
+  private positionValue: Point;
+  private velocityValue: Point;
+  private polygon: Polygon;
+  private bounceCount = 0;
 
-  constructor(polygon: Polygon, position: Point, radius: number, velocity: Point, targetSpeed: number) {
-    this.targetSpeed = targetSpeed;
-    this.blade = Bodies.circle(position.x, position.y, radius, {
-      restitution: 1,
-      friction: 0,
-      frictionAir: 0,
-      inertia: Number.POSITIVE_INFINITY,
-      label: "ink-blade",
-    });
-    Body.setVelocity(this.blade, velocity);
-    Composite.add(this.engine.world, this.blade);
-    this.setBoundary(polygon);
+  constructor(
+    polygon: Polygon,
+    position: Point,
+    private readonly radius: number,
+    velocity: Point,
+    private readonly targetSpeed: number,
+  ) {
+    this.polygon = polygon;
+    this.positionValue = { ...position };
+    this.velocityValue = this.withTargetSpeed(velocity);
   }
 
   get position(): Point {
-    return { x: this.blade.position.x, y: this.blade.position.y };
+    return { ...this.positionValue };
   }
 
   get velocity(): Point {
-    return { x: this.blade.velocity.x, y: this.blade.velocity.y };
+    return { ...this.velocityValue };
   }
 
   reset(position: Point, velocity: Point, polygon: Polygon): void {
-    Body.setPosition(this.blade, position);
-    Body.setVelocity(this.blade, velocity);
-    this.setBoundary(polygon);
+    this.positionValue = { ...position };
+    this.velocityValue = this.withTargetSpeed(velocity);
+    this.polygon = polygon;
+    this.bounceCount = 0;
   }
 
   setBoundary(polygon: Polygon): void {
-    Composite.remove(this.engine.world, this.boundaries);
-    this.boundaries = polygon.map((start, index) => {
-      const end = polygon[(index + 1) % polygon.length];
-      const length = Math.hypot(end.x - start.x, end.y - start.y);
-      return Bodies.rectangle((start.x + end.x) / 2, (start.y + end.y) / 2, length + 10, 10, {
-        isStatic: true,
-        angle: Math.atan2(end.y - start.y, end.x - start.x),
-        restitution: 1,
-        friction: 0,
-        label: "ink-boundary",
-      });
-    });
-    Composite.add(this.engine.world, this.boundaries);
+    this.polygon = polygon;
   }
 
   update(milliseconds: number): void {
-    Engine.update(this.engine, Math.min(milliseconds, 25));
-    const speed = Math.hypot(this.blade.velocity.x, this.blade.velocity.y);
-    if (speed > 0.01 && Math.abs(speed - this.targetSpeed) > 0.05) {
-      Body.setVelocity(this.blade, {
-        x: (this.blade.velocity.x / speed) * this.targetSpeed,
-        y: (this.blade.velocity.y / speed) * this.targetSpeed,
-      });
+    let remaining = Math.min(milliseconds, 25) / FRAME_MS;
+    let attempts = 0;
+    while (remaining > 0.001 && attempts < 3) {
+      attempts += 1;
+      const candidate = {
+        x: this.positionValue.x + this.velocityValue.x * remaining,
+        y: this.positionValue.y + this.velocityValue.y * remaining,
+      };
+      if (this.isInside(candidate)) {
+        this.positionValue = candidate;
+        return;
+      }
+
+      let low = 0;
+      let high = remaining;
+      for (let index = 0; index < 9; index += 1) {
+        const mid = (low + high) / 2;
+        const probe = {
+          x: this.positionValue.x + this.velocityValue.x * mid,
+          y: this.positionValue.y + this.velocityValue.y * mid,
+        };
+        if (this.isInside(probe)) low = mid;
+        else high = mid;
+      }
+      this.positionValue = {
+        x: this.positionValue.x + this.velocityValue.x * Math.max(0, low - 0.01),
+        y: this.positionValue.y + this.velocityValue.y * Math.max(0, low - 0.01),
+      };
+      this.reflectFromClosestEdge();
+      remaining -= low;
     }
+  }
+
+  private isInside(point: Point): boolean {
+    if (!pointInPolygon(point, this.polygon)) return false;
+    return this.polygon.every((start, index) => {
+      const end = this.polygon[(index + 1) % this.polygon.length];
+      return distanceToSegment(point, start, end) >= this.radius;
+    });
+  }
+
+  private reflectFromClosestEdge(): void {
+    const { start, end } = closestEdge(this.positionValue, this.polygon);
+    const tangent = normalize({ x: end.x - start.x, y: end.y - start.y });
+    const normal = { x: -tangent.y, y: tangent.x };
+    const dot = this.velocityValue.x * normal.x + this.velocityValue.y * normal.y;
+    let reflected = {
+      x: this.velocityValue.x - 2 * dot * normal.x,
+      y: this.velocityValue.y - 2 * dot * normal.y,
+    };
+    // A tiny deterministic nudge prevents a blade from repeating the same corner trap.
+    this.bounceCount += 1;
+    const nudge = Math.sin(this.bounceCount * 12.9898) * 0.035;
+    const cos = Math.cos(nudge);
+    const sin = Math.sin(nudge);
+    reflected = {
+      x: reflected.x * cos - reflected.y * sin,
+      y: reflected.x * sin + reflected.y * cos,
+    };
+    this.velocityValue = this.withTargetSpeed(reflected);
+  }
+
+  private withTargetSpeed(vector: Point): Point {
+    const unit = normalize(vector);
+    return { x: unit.x * this.targetSpeed, y: unit.y * this.targetSpeed };
   }
 }

@@ -20,7 +20,7 @@ required<HTMLButtonElement>("#pause").addEventListener("click", () => game.pause
 required<HTMLButtonElement>("#resume").addEventListener("click", () => game.resume());
 required<HTMLButtonElement>("#dialogRestart").addEventListener("click", () => game.restart());
 required<HTMLButtonElement>("#again").addEventListener("click", () => game.restart());
-required<HTMLButtonElement>("#nextLevel").addEventListener("click", () => game.restart());
+required<HTMLButtonElement>("#nextLevel").addEventListener("click", () => game.nextLevel());
 required<HTMLButtonElement>("#levels").addEventListener("click", () => game.restart());
 required<HTMLButtonElement>("#resultLevels").addEventListener("click", () => game.restart());
 
