@@ -27,11 +27,6 @@ required<HTMLButtonElement>("#resultLevels").addEventListener("click", () => gam
 required<HTMLButtonElement>("#settings").addEventListener("click", () => {
   settingsMenu.hidden = !settingsMenu.hidden;
 });
-required<HTMLButtonElement>("#home").addEventListener("click", () => {
-  settingsMenu.hidden = true;
-  game.restart();
-});
-
 const soundButton = required<HTMLButtonElement>("#sound");
 function renderSoundState(): void {
   const enabled = game.soundEnabled;

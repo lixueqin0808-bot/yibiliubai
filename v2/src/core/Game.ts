@@ -369,7 +369,7 @@ export class Game {
     ctx.translate(position.x, position.y);
     ctx.rotate(time * 0.004);
     if (this.inkBladeImage.complete && this.inkBladeImage.naturalWidth > 0) {
-      const size = 46;
+      const size = 40;
       ctx.drawImage(this.inkBladeImage, -size / 2, -size / 2, size, size);
       ctx.restore();
       return;
@@ -445,18 +445,18 @@ export class Game {
   private drawCutEffect(ctx: CanvasRenderingContext2D, time: number): void {
     if (!this.cutEffect) return;
     const age = time - this.cutEffect.startedAt;
-    if (age > 380) {
+    if (age > 560) {
       this.cutEffect = null;
       return;
     }
-    const fade = Math.max(0, 1 - age / 360);
-    const offset = Math.min(28, age * 0.09);
+    const fade = Math.max(0, 1 - age / 540);
+    const offset = Math.min(48, age * 0.12);
     const center = this.polygonCentroid(this.cutEffect.removed);
     ctx.save();
     ctx.translate(center.x + this.cutEffect.normal.x * offset, center.y + this.cutEffect.normal.y * offset);
     ctx.rotate(this.cutEffect.rotation * Math.min(1, age / 220));
     ctx.translate(-center.x, -center.y);
-    ctx.globalAlpha = fade * 0.5;
+    ctx.globalAlpha = fade * 0.76;
     ctx.fillStyle = "#171716";
     ctx.beginPath();
     this.cutEffect.removed.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
@@ -464,16 +464,16 @@ export class Game {
     ctx.fill();
     if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
       ctx.clip();
-      ctx.globalAlpha = fade * 0.5;
+      ctx.globalAlpha = fade * 0.72;
       ctx.drawImage(this.inkTextureImage, 28, 172, 334, 548);
     }
     ctx.restore();
 
-    if (age < 210) {
+    if (age < 180) {
       ctx.save();
       ctx.globalAlpha = 1 - age / 210;
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 6 - age / 50;
+      ctx.lineWidth = 7 - age / 42;
       ctx.shadowBlur = 12;
       ctx.shadowColor = "#ffffff";
       ctx.beginPath();
