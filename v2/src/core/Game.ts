@@ -8,7 +8,9 @@ import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
 import backgroundUrl from "../assets/xuan-paper-background.webp";
 import dangerMarkUrl from "../assets/danger-mark.webp";
-import inkBladeUrl from "../assets/ink-blade.webp";
+import inkBladeFourUrl from "../assets/ink-blade-four.webp";
+import inkBladeFiveUrl from "../assets/ink-blade-five.webp";
+import inkIronEdgeUrl from "../assets/ink-iron-edge.webp";
 import inkTextureUrl from "../assets/ink-map-texture.webp";
 
 interface GameElements {
@@ -66,7 +68,9 @@ export class Game {
   private activePointerId: number | null = null;
   private readonly backgroundImage = loadImage(backgroundUrl);
   private readonly dangerMarkImage = loadImage(dangerMarkUrl);
-  private readonly inkBladeImage = loadImage(inkBladeUrl);
+  private readonly inkBladeFourImage = loadImage(inkBladeFourUrl);
+  private readonly inkBladeFiveImage = loadImage(inkBladeFiveUrl);
+  private readonly inkIronEdgeImage = loadImage(inkIronEdgeUrl);
   private readonly inkTextureImage = loadImage(inkTextureUrl);
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -392,13 +396,15 @@ export class Game {
     ctx.save();
     ctx.translate(position.x, position.y);
     ctx.rotate(time * (0.004 + index * 0.0007));
-    if (this.inkBladeImage.complete && this.inkBladeImage.naturalWidth > 0) {
-      const size = index === 0 ? 40 : 36;
-      ctx.drawImage(this.inkBladeImage, -size / 2, -size / 2, size, size);
+    const blade = this.level.blades[index];
+    const image = blade.variant === "five" ? this.inkBladeFiveImage : this.inkBladeFourImage;
+    if (image.complete && image.naturalWidth > 0) {
+      const size = blade.variant === "five" ? 56 : 42;
+      ctx.drawImage(image, -size / 2, -size / 2, size, size);
       ctx.restore();
       return;
     }
-    const bladeScale = this.level.blades[index].radius / 18;
+    const bladeScale = blade.radius / 18;
     ctx.scale(bladeScale, bladeScale);
     for (let index = 0; index < 4; index += 1) {
       ctx.rotate(Math.PI / 2);
@@ -437,11 +443,21 @@ export class Game {
     if (!this.level.metalSegments) return;
     ctx.save();
     ctx.lineCap = "round";
-    ctx.lineWidth = 12;
-    ctx.strokeStyle = "#353535";
-    ctx.shadowBlur = 5;
-    ctx.shadowColor = "#050505";
     this.level.metalSegments.forEach((metal) => {
+      const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
+      const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
+      if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
+        ctx.save();
+        ctx.translate(metal.start.x, metal.start.y);
+        ctx.rotate(angle);
+        ctx.drawImage(this.inkIronEdgeImage, 0, -7, length, 14);
+        ctx.restore();
+        return;
+      }
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = "#353535";
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = "#050505";
       ctx.beginPath();
       ctx.moveTo(metal.start.x, metal.start.y);
       ctx.lineTo(metal.end.x, metal.end.y);
