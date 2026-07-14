@@ -1,4 +1,5 @@
 import type { Point, Polygon } from "../core/types";
+import type { BoundarySegment } from "../geometry/polygon";
 
 export const LOGICAL_WIDTH = 390;
 export const LOGICAL_HEIGHT = 844;
@@ -10,18 +11,13 @@ export interface BladeConfig extends Point {
   velocity: Point;
 }
 
-export interface MetalSegment {
-  start: Point;
-  end: Point;
-}
-
 export interface LevelDefinition {
   id: number;
   target: number;
   polygon: Polygon;
   blades: BladeConfig[];
   guide?: { start: Point; end: Point };
-  metalSegments?: MetalSegment[];
+  metalEdges?: BoundarySegment[];
 }
 
 const levelOne: Polygon = [
@@ -64,9 +60,9 @@ export const LEVELS: LevelDefinition[] = [
       { x: 235, y: 621 }, { x: 107, y: 586 }, { x: 79, y: 487 }, { x: 97, y: 365 },
     ],
     blades: [{ x: 205, y: 467, variant: "four", radius: 12, speed: 2.7, velocity: { x: -2.18, y: 1.59 } }],
-    metalSegments: [
-      { start: { x: 91, y: 408 }, end: { x: 87, y: 438 } },
-      { start: { x: 303, y: 414 }, end: { x: 300, y: 446 } },
+    metalEdges: [
+      { start: { x: 79, y: 487 }, end: { x: 97, y: 365 } },
+      { start: { x: 315, y: 319 }, end: { x: 291, y: 568 } },
     ],
   },
   {
@@ -81,7 +77,7 @@ export const LEVELS: LevelDefinition[] = [
       { x: 168, y: 411, variant: "five", radius: 16, speed: 2.45, velocity: { x: 1.98, y: 1.42 } },
       { x: 243, y: 521, variant: "four", radius: 11, speed: 2.72, velocity: { x: -1.98, y: 1.87 } },
     ],
-    metalSegments: [{ start: { x: 99, y: 509 }, end: { x: 95, y: 535 } }],
+    metalEdges: [{ start: { x: 84, y: 559 }, end: { x: 94, y: 467 } }],
   },
 ];
 

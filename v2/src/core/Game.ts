@@ -2,7 +2,7 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
-import { distanceToSegment, lineSide, pointInPolygon, polygonArea } from "../geometry/polygon";
+import { distanceToSegment, lineSide, pointInPolygon, polygonArea, visibleBoundarySegments } from "../geometry/polygon";
 import { LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
@@ -222,7 +222,7 @@ export class Game {
       return false;
     }
 
-    if (this.level.metalSegments?.some((metal) => result.intersections.some(
+    if (this.level.metalEdges?.some((metal) => result.intersections.some(
       (intersection) => distanceToSegment(intersection, metal.start, metal.end) <= 9,
     ))) {
       if (!silent) this.showInvalidCut(start, end);
@@ -342,7 +342,6 @@ export class Game {
           this.preview.start,
           this.preview.end,
         )) this.handleBladeHit(blade.position, this.preview.start, this.preview.end);
-        blade.update(delta);
       });
     }
     this.draw(time);
@@ -379,16 +378,36 @@ export class Game {
     ctx.beginPath();
     this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
-    ctx.fillStyle = "#0c0c0b";
+    ctx.fillStyle = "#0b0b0a";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.62)";
+    ctx.shadowBlur = 13;
+    ctx.shadowOffsetY = 5;
     ctx.fill();
-    ctx.strokeStyle = "#050505";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.shadowColor = "transparent";
     ctx.clip();
     if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
-      ctx.globalAlpha = 0.92;
+      ctx.globalAlpha = 0.78;
       ctx.drawImage(this.inkTextureImage, 28, 172, 334, 548);
     }
+    const inkWash = ctx.createLinearGradient(0, 230, 0, 640);
+    inkWash.addColorStop(0, "rgba(255, 255, 255, 0.055)");
+    inkWash.addColorStop(0.42, "rgba(0, 0, 0, 0)");
+    inkWash.addColorStop(1, "rgba(0, 0, 0, 0.24)");
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = inkWash;
+    ctx.fillRect(0, 180, LOGICAL_WIDTH, 500);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.92)";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(187, 187, 175, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -440,17 +459,20 @@ export class Game {
   }
 
   private drawMetalSegments(ctx: CanvasRenderingContext2D): void {
-    if (!this.level.metalSegments) return;
+    if (!this.level.metalEdges) return;
     ctx.save();
     ctx.lineCap = "round";
-    this.level.metalSegments.forEach((metal) => {
+    visibleBoundarySegments(this.polygon, this.level.metalEdges).forEach((metal) => {
       const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
       const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
       if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
         ctx.save();
         ctx.translate(metal.start.x, metal.start.y);
         ctx.rotate(angle);
-        ctx.drawImage(this.inkIronEdgeImage, 0, -7, length, 14);
+        ctx.globalAlpha = 0.92;
+        ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+        ctx.shadowBlur = 3;
+        ctx.drawImage(this.inkIronEdgeImage, 0, -8, length, 16);
         ctx.restore();
         return;
       }

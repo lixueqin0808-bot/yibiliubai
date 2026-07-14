@@ -59,6 +59,25 @@ export function distanceToPolygonEdge(point: Point, polygon: Polygon): number {
   return minimum;
 }
 
+export interface BoundarySegment {
+  start: Point;
+  end: Point;
+}
+
+/** Returns the currently retained portions of the original locked map edges. */
+export function visibleBoundarySegments(polygon: Polygon, lockedEdges: BoundarySegment[]): BoundarySegment[] {
+  const visible: BoundarySegment[] = [];
+  polygon.forEach((start, index) => {
+    const end = polygon[(index + 1) % polygon.length];
+    const isLocked = lockedEdges.some((locked) => (
+      distanceToSegment(start, locked.start, locked.end) <= 0.75
+      && distanceToSegment(end, locked.start, locked.end) <= 0.75
+    ));
+    if (isLocked) visible.push({ start, end });
+  });
+  return visible;
+}
+
 export function dedupePolygon(polygon: Polygon): Polygon {
   const result: Polygon = [];
   for (const point of polygon) {
