@@ -9,28 +9,38 @@ function required<T extends Element>(selector: string): T {
 
 const canvas = required<HTMLCanvasElement>("#game");
 const game = new Game(canvas, {
-  progressText: required("#progressText"),
-  progressBar: required("#progressBar"),
-  tip: required("#tip"),
+  progressFill: required("#progressFill"),
+  lifeLeaves: Array.from(document.querySelectorAll<HTMLElement>(".life-leaf")),
   pauseDialog: required("#pauseDialog"),
   resultDialog: required("#resultDialog"),
-  resultMeta: required("#resultMeta"),
-  stars: required("#stars"),
 });
 
+const settingsMenu = required<HTMLElement>("#settingsMenu");
 required<HTMLButtonElement>("#pause").addEventListener("click", () => game.pause());
 required<HTMLButtonElement>("#resume").addEventListener("click", () => game.resume());
 required<HTMLButtonElement>("#dialogRestart").addEventListener("click", () => game.restart());
 required<HTMLButtonElement>("#again").addEventListener("click", () => game.restart());
+required<HTMLButtonElement>("#nextLevel").addEventListener("click", () => game.restart());
+required<HTMLButtonElement>("#levels").addEventListener("click", () => game.restart());
+required<HTMLButtonElement>("#resultLevels").addEventListener("click", () => game.restart());
+
+required<HTMLButtonElement>("#settings").addEventListener("click", () => {
+  settingsMenu.hidden = !settingsMenu.hidden;
+});
+required<HTMLButtonElement>("#home").addEventListener("click", () => {
+  settingsMenu.hidden = true;
+  game.restart();
+});
 
 const soundButton = required<HTMLButtonElement>("#sound");
 function renderSoundState(): void {
   const enabled = game.soundEnabled;
   soundButton.textContent = enabled ? "♪" : "×";
-  soundButton.setAttribute("aria-label", enabled ? "关闭声音" : "打开声音");
-  soundButton.setAttribute("title", enabled ? "关闭声音" : "打开声音");
+  soundButton.setAttribute("aria-label", enabled ? "关闭音乐" : "打开音乐");
+  soundButton.setAttribute("title", enabled ? "关闭音乐" : "打开音乐");
   soundButton.setAttribute("aria-pressed", String(enabled));
 }
+
 soundButton.addEventListener("click", () => {
   game.toggleSound();
   renderSoundState();

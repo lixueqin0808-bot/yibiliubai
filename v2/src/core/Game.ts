@@ -5,19 +5,17 @@ import { splitPolygon } from "../geometry/cut";
 import { lineSide, pointInPolygon, polygonArea } from "../geometry/polygon";
 import { GOLDEN_LEVEL, GOLDEN_POLYGON, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
+import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
 import backgroundUrl from "../assets/xuan-paper-background.webp";
 import dangerMarkUrl from "../assets/danger-mark.webp";
 import inkBladeUrl from "../assets/ink-blade.webp";
 import inkTextureUrl from "../assets/ink-map-texture.webp";
 
 interface GameElements {
-  progressText: HTMLElement;
-  progressBar: HTMLElement;
-  tip: HTMLElement;
+  progressFill: HTMLElement;
+  lifeLeaves: HTMLElement[];
   pauseDialog: HTMLDialogElement;
   resultDialog: HTMLDialogElement;
-  resultMeta: HTMLElement;
-  stars: HTMLElement;
 }
 
 interface CutEffect {
@@ -27,6 +25,7 @@ interface CutEffect {
   startedAt: number;
   normal: Point;
   particles: InkParticle[];
+  rotation: number;
 }
 
 interface InkParticle {
@@ -57,14 +56,12 @@ export class Game {
   private preview: CutPreview | null = null;
   private status: GameStatus = "playing";
   private lastFrame = performance.now();
-  private startTime = performance.now();
-  private pausedAt = 0;
-  private pausedDuration = 0;
   private effectiveCuts = 0;
+  private lives = ROUND_LIVES;
   private cutEffect: CutEffect | null = null;
   private dangerPulse: { point: Point; startedAt: number } | null = null;
   private dangerLine: { start: Point; end: Point; startedAt: number } | null = null;
-  private tipTimeout = 0;
+  private invalidLine: { start: Point; end: Point; startedAt: number } | null = null;
   private readonly audio = new AudioManager();
   private lastBladePosition: Point = { ...GOLDEN_LEVEL.blade };
   private freezeUntil = 0;
@@ -99,11 +96,10 @@ export class Game {
     this.freezeUntil = 0;
     this.inputLockedUntil = 0;
     this.shakeUntil = 0;
-    this.startTime = performance.now();
-    this.pausedDuration = 0;
     this.effectiveCuts = 0;
-    this.updateProgress();
-    this.setTip("横划一笔", 1500);
+    this.lives = ROUND_LIVES;
+    this.invalidLine = null;
+    this.updateHud();
     if (this.elements.pauseDialog.open) this.elements.pauseDialog.close();
     if (this.elements.resultDialog.open) this.elements.resultDialog.close();
   }
@@ -111,13 +107,11 @@ export class Game {
   pause(): void {
     if (this.status !== "playing") return;
     this.status = "paused";
-    this.pausedAt = performance.now();
     this.elements.pauseDialog.showModal();
   }
 
   resume(): void {
     if (this.status !== "paused") return;
-    this.pausedDuration += performance.now() - this.pausedAt;
     this.status = "playing";
     this.elements.pauseDialog.close();
   }
@@ -166,7 +160,7 @@ export class Game {
         GOLDEN_LEVEL.blade.radius + 2,
       );
       if (this.preview.danger) {
-        this.fail(this.physics.position, this.preview.start, this.preview.end);
+        this.handleBladeHit(this.physics.position, this.preview.start, this.preview.end);
       } else if (this.attemptCut(this.preview.start, this.preview.end, true)) {
         this.clearGesture();
       }
@@ -199,13 +193,13 @@ export class Game {
 
   private attemptCut(start: Point, end: Point, silent = false): boolean {
     if (segmentHitsCircle(start, end, this.physics.position, GOLDEN_LEVEL.blade.radius + 2)) {
-      this.fail(this.physics.position, start, end);
+      this.handleBladeHit(this.physics.position, start, end);
       return false;
     }
 
     const result = splitPolygon(this.polygon, start, end);
     if (!result) {
-      if (!silent) this.setTip("这一笔没有切开", 1300);
+      if (!silent) this.showInvalidCut(start, end);
       return false;
     }
 
@@ -213,7 +207,7 @@ export class Game {
     const inPositive = pointInPolygon(blade, result.positive);
     const inNegative = pointInPolygon(blade, result.negative);
     if (inPositive === inNegative) {
-      if (!silent) this.setTip("墨刃位置不明", 1300);
+      if (!silent) this.showInvalidCut(start, end);
       return false;
     }
 
@@ -230,7 +224,7 @@ export class Game {
     const direction = { x: (cutEnd.x - cutStart.x) / length, y: (cutEnd.y - cutStart.y) / length };
     const side = Math.sign(lineSide(cutStart, cutEnd, removedCenter)) || 1;
     const normal = { x: -direction.y * side, y: direction.x * side };
-    const particles: InkParticle[] = Array.from({ length: this.reduceMotion ? 8 : 30 }, () => {
+    const particles: InkParticle[] = Array.from({ length: this.reduceMotion ? 4 : 10 }, () => {
       const along = Math.random();
       const speed = 0.035 + Math.random() * 0.105;
       const scatter = (Math.random() - 0.5) * 0.08;
@@ -247,70 +241,65 @@ export class Game {
         life: 340 + Math.random() * 260,
       };
     });
-    this.cutEffect = { lineStart: cutStart, lineEnd: cutEnd, removed, startedAt: now, normal, particles };
+    this.cutEffect = {
+      lineStart: cutStart,
+      lineEnd: cutEnd,
+      removed,
+      startedAt: now,
+      normal,
+      particles,
+      rotation: (Math.random() - 0.5) * 0.12,
+    };
     this.freezeUntil = now + 55;
     this.inputLockedUntil = now + 180;
     this.shakeUntil = now + 170;
     this.audio.playSuccess();
     if (navigator.vibrate) navigator.vibrate(12);
-    this.elements.progressText.classList.remove("impact");
-    requestAnimationFrame(() => this.elements.progressText.classList.add("impact"));
-    window.setTimeout(() => this.elements.progressText.classList.remove("impact"), 280);
-    this.updateProgress();
-    if (this.clearedRatio >= GOLDEN_LEVEL.target) this.complete();
-    else this.setTip("", 0);
+    this.updateHud();
+    if (this.remainingAreaRatio <= GOLDEN_LEVEL.target) this.complete();
     return true;
   }
 
-  private fail(point: Point, lineStart?: Point, lineEnd?: Point): void {
+  private handleBladeHit(point: Point, lineStart?: Point, lineEnd?: Point): void {
     if (this.status !== "playing") return;
-    this.status = "failed";
+    this.status = "recovering";
     this.clearGesture();
     const now = performance.now();
     this.dangerPulse = { point: { ...point }, startedAt: now };
     this.dangerLine = lineStart && lineEnd ? { start: { ...lineStart }, end: { ...lineEnd }, startedAt: now } : null;
     this.freezeUntil = now + 65;
     this.shakeUntil = now + 190;
-    this.setTip("切线碰到墨刃，重试", 520);
     this.audio.playFail();
     if (navigator.vibrate) navigator.vibrate(24);
-    window.setTimeout(() => this.restart(), 520);
+    const result = applyBladeHit(this.lives);
+    this.lives = result.lives;
+    this.updateHud();
+    window.setTimeout(() => {
+      if (result.shouldRestart) this.restart();
+      else if (this.status === "recovering") this.status = "playing";
+    }, 520);
   }
 
   private complete(): void {
     this.status = "completed";
-    const seconds = this.elapsedSeconds;
-    const thresholds = GOLDEN_LEVEL.starThresholds;
-    const starCount = seconds <= thresholds.three.seconds && this.effectiveCuts <= thresholds.three.cuts
-      ? 3
-      : seconds <= thresholds.two.seconds && this.effectiveCuts <= thresholds.two.cuts ? 2 : 1;
-    this.elements.stars.textContent = "★".repeat(starCount) + "☆".repeat(3 - starCount);
-    this.elements.stars.setAttribute("aria-label", `${starCount}星评价`);
-    this.elements.resultMeta.textContent = `用时 ${seconds} 秒 · ${this.effectiveCuts} 笔`;
     this.audio.playComplete();
     window.setTimeout(() => this.elements.resultDialog.showModal(), 360);
   }
 
-  private get clearedRatio(): number {
-    return Math.max(0, Math.min(1, 1 - polygonArea(this.polygon) / this.initialArea));
+  private get remainingAreaRatio(): number {
+    return remainingRatio(polygonArea(this.polygon), this.initialArea);
   }
 
-  private get elapsedSeconds(): number {
-    return Math.max(1, Math.round((performance.now() - this.startTime - this.pausedDuration) / 1000));
+  private updateHud(): void {
+    this.elements.progressFill.style.transform = `scaleX(${this.remainingAreaRatio})`;
+    this.elements.lifeLeaves.forEach((leaf, index) => {
+      leaf.classList.toggle("is-spent", index >= this.lives);
+    });
   }
 
-  private updateProgress(): void {
-    const percent = Math.round(this.clearedRatio * 100);
-    this.elements.progressText.textContent = `${percent}%`;
-    this.elements.progressBar.style.width = `${percent}%`;
-  }
-
-  private setTip(message: string, duration: number): void {
-    window.clearTimeout(this.tipTimeout);
-    this.elements.tip.textContent = message;
-    this.tipTimeout = window.setTimeout(() => {
-      if (this.status === "playing") this.elements.tip.textContent = "";
-    }, duration);
+  private showInvalidCut(start: Point, end: Point): void {
+    this.invalidLine = { start: { ...start }, end: { ...end }, startedAt: performance.now() };
+    this.audio.playInvalid();
   }
 
   private frame(time: number): void {
@@ -325,7 +314,7 @@ export class Game {
         GOLDEN_LEVEL.blade.radius + 2,
         this.preview.start,
         this.preview.end,
-      )) this.fail(this.physics.position, this.preview.start, this.preview.end);
+      )) this.handleBladeHit(this.physics.position, this.preview.start, this.preview.end);
     }
     this.draw(time);
     requestAnimationFrame((nextTime) => this.frame(nextTime));
@@ -350,6 +339,7 @@ export class Game {
     this.drawBlade(ctx, time);
     this.drawCutEffect(ctx, time);
     this.drawPreview(ctx);
+    this.drawInvalidCut(ctx, time);
     this.drawDanger(ctx, time);
     ctx.restore();
   }
@@ -433,17 +423,38 @@ export class Game {
     ctx.restore();
   }
 
+  private drawInvalidCut(ctx: CanvasRenderingContext2D, time: number): void {
+    if (!this.invalidLine) return;
+    const age = time - this.invalidLine.startedAt;
+    if (age > 180) {
+      this.invalidLine = null;
+      return;
+    }
+    ctx.save();
+    ctx.globalAlpha = 1 - age / 180;
+    ctx.strokeStyle = "#777773";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(this.invalidLine.start.x, this.invalidLine.start.y);
+    ctx.lineTo(this.invalidLine.end.x, this.invalidLine.end.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   private drawCutEffect(ctx: CanvasRenderingContext2D, time: number): void {
     if (!this.cutEffect) return;
     const age = time - this.cutEffect.startedAt;
-    if (age > 650) {
+    if (age > 380) {
       this.cutEffect = null;
       return;
     }
-    const fade = Math.max(0, 1 - age / 520);
-    const offset = Math.min(13, age * 0.032);
+    const fade = Math.max(0, 1 - age / 360);
+    const offset = Math.min(28, age * 0.09);
+    const center = this.polygonCentroid(this.cutEffect.removed);
     ctx.save();
-    ctx.translate(this.cutEffect.normal.x * offset, this.cutEffect.normal.y * offset);
+    ctx.translate(center.x + this.cutEffect.normal.x * offset, center.y + this.cutEffect.normal.y * offset);
+    ctx.rotate(this.cutEffect.rotation * Math.min(1, age / 220));
+    ctx.translate(-center.x, -center.y);
     ctx.globalAlpha = fade * 0.5;
     ctx.fillStyle = "#171716";
     ctx.beginPath();

@@ -34,6 +34,10 @@ export class AudioManager {
     this.noise(0.07, 0.045, 480);
   }
 
+  playInvalid(): void {
+    this.tone(270, 230, 0.06, 0.022, "triangle");
+  }
+
   playComplete(): void {
     this.tone(180, 120, 0.22, 0.07, "sine");
     this.tone(520, 650, 0.18, 0.035, "triangle", 0.12);

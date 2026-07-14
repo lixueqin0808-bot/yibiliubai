@@ -10,41 +10,44 @@
     <main class="game-shell" aria-label="一笔留白游戏">
       <canvas id="game" width="390" height="844" aria-label="水墨切割游戏画面"></canvas>
 
-      <header class="hud">
-        <strong class="level-mark" aria-label="第一关">01</strong>
-        <div class="hud-actions">
-          <button id="sound" class="icon-button" type="button" aria-label="关闭声音" title="关闭声音" aria-pressed="true">♪</button>
-          <button id="pause" class="icon-button" type="button" aria-label="暂停" title="暂停">Ⅱ</button>
+      <section class="progress" aria-label="剩余留白">
+        <div id="lifeLeaves" class="life-leaves" aria-label="三次机会">
+          <i class="life-leaf"></i><i class="life-leaf"></i><i class="life-leaf"></i>
         </div>
-      </header>
-
-      <section class="progress" aria-label="留白进度">
-        <div class="progress-copy">
-          <strong id="progressText">0%</strong>
-        </div>
-        <div class="progress-track" aria-hidden="true">
-          <i id="progressBar"></i>
-          <b></b>
+        <div class="progress-rail" aria-hidden="true">
+          <span id="progressFill" class="progress-fill"></span>
+          <span class="breath-leaf breath-leaf-left"></span>
+          <span class="breath-leaf breath-leaf-right"></span>
+          <b class="target-knot"></b>
         </div>
       </section>
 
-      <p id="tip" class="tip" role="status">横划一笔</p>
+      <div class="corner-controls">
+        <button id="pause" class="corner-button" type="button" aria-label="暂停" title="暂停">Ⅱ</button>
+        <div class="settings-wrap">
+          <div id="settingsMenu" class="settings-menu" hidden>
+            <button id="sound" class="corner-button" type="button" aria-label="关闭音乐" title="关闭音乐" aria-pressed="true">♪</button>
+            <button id="home" class="corner-button" type="button" aria-label="回到主界面" title="回到主界面">⌂</button>
+          </div>
+          <button id="settings" class="corner-button" type="button" aria-label="设置" title="设置">⋮</button>
+        </div>
+      </div>
 
-      <dialog id="pauseDialog" class="dialog">
-        <h2>停笔</h2>
-        <p>画境已经暂停。</p>
-        <div class="dialog-actions">
-          <button id="resume" class="primary-button" type="button">继续</button>
-          <button id="dialogRestart" class="text-button" type="button">重新开始</button>
+      <dialog id="pauseDialog" class="dialog pause-dialog">
+        <div class="dialog-actions icon-actions">
+          <button id="levels" class="menu-action" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
+          <button id="dialogRestart" class="menu-action" type="button" aria-label="重玩" title="重玩">↻</button>
+          <button id="resume" class="menu-action menu-primary" type="button" aria-label="继续" title="继续">▶</button>
         </div>
       </dialog>
 
       <dialog id="resultDialog" class="dialog result-dialog">
         <span class="stamp" aria-label="留白已成"></span>
-        <div id="stars" class="stars" aria-label="三星评价">★★★</div>
-        <h2>初试锋芒</h2>
-        <p id="resultMeta">用时 0 秒 · 0 笔</p>
-        <button id="again" class="primary-button" type="button">再试一次</button>
+        <div class="dialog-actions icon-actions">
+          <button id="resultLevels" class="menu-action" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
+          <button id="again" class="menu-action" type="button" aria-label="重玩" title="重玩">↻</button>
+          <button id="nextLevel" class="menu-action menu-primary" type="button" aria-label="下一关" title="下一关">▶</button>
+        </div>
       </dialog>
     </main>
     <script type="module" src="/src/main.ts"></script>

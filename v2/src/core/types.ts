@@ -5,7 +5,7 @@ export interface Point {
 
 export type Polygon = Point[];
 
-export type GameStatus = "playing" | "paused" | "failed" | "completed";
+export type GameStatus = "playing" | "paused" | "recovering" | "completed";
 
 export interface CutPreview {
   start: Point;
