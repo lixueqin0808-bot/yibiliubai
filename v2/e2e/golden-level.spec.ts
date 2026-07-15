@@ -7,6 +7,7 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.screenshot({ path: "test-results/start-screen.png", fullPage: true });
   await page.locator("#startGame").click();
   await expect(page.locator("#startScreen")).toBeHidden();
+  await expect.poll(() => page.locator(".target-knot").evaluate((element) => (element as HTMLElement).style.left)).toBe("48%");
   await expect(page.locator(".life-dot")).toHaveCount(3);
   await expect(page.locator("#settingsMenu")).toBeHidden();
   await page.locator("#settings").click();

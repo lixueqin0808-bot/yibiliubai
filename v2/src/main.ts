@@ -20,6 +20,7 @@ let campaign = loadCampaignProgress();
 
 const game = new Game(canvas, {
   progressFill: required("#progressFill"),
+  targetKnot: required(".target-knot"),
   lifeLeaves: Array.from(document.querySelectorAll<HTMLElement>(".life-dot")),
   pauseDialog: required("#pauseDialog"),
   resultDialog: required("#resultDialog"),

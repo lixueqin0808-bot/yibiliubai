@@ -8,9 +8,12 @@ describe("fifteen-level campaign", () => {
     expect(LEVELS[3].metalEdges).toHaveLength(1);
     expect(LEVELS[4].blades).toHaveLength(4);
     expect(LEVELS[4].metalEdges).toHaveLength(2);
-    expect(LEVELS[5].blades).toHaveLength(3);
+    expect(LEVELS[5].blades).toHaveLength(4);
     expect(LEVELS[9].metalEdges).toHaveLength(2);
-    expect(LEVELS[14].blades).toHaveLength(4);
+    expect(LEVELS[14].blades).toHaveLength(5);
     expect(LEVELS[14].metalEdges).toHaveLength(3);
+    LEVELS.slice(1).forEach((level, index) => {
+      expect(level.target).toBeLessThan(LEVELS[index].target);
+    });
   });
 });

@@ -16,6 +16,7 @@ import inkTextureUrl from "../assets/ink-slate-map-texture.webp";
 
 interface GameElements {
   progressFill: HTMLElement;
+  targetKnot: HTMLElement;
   lifeLeaves: HTMLElement[];
   pauseDialog: HTMLDialogElement;
   resultDialog: HTMLDialogElement;
@@ -367,6 +368,7 @@ export class Game {
   private updateHud(): void {
     const hiddenPercent = Math.max(0, 100 - this.remainingAreaRatio * 100);
     this.elements.progressFill.style.clipPath = `inset(0 ${hiddenPercent}% 0 0)`;
+    this.elements.targetKnot.style.left = `${this.level.target * 100}%`;
     this.elements.lifeLeaves.forEach((leaf, index) => {
       leaf.classList.toggle("is-spent", index >= this.lives);
     });
