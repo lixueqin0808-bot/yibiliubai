@@ -161,6 +161,10 @@ export class Game {
     return this.audio.isEnabled;
   }
 
+  playUiTap(): void {
+    this.audio.playTap();
+  }
+
   private resizeCanvas(): void {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = LOGICAL_WIDTH * ratio;
@@ -249,7 +253,7 @@ export class Game {
     if (this.level.metalEdges?.some((metal) => result.intersections.some(
       (intersection) => distanceToSegment(intersection, metal.start, metal.end) <= 9,
     ))) {
-      if (!silent) this.showInvalidCut(start, end);
+      if (!silent) this.showMetalCut(start, end);
       return false;
     }
 
@@ -317,9 +321,10 @@ export class Game {
     this.dangerLine = lineStart && lineEnd ? { start: { ...lineStart }, end: { ...lineEnd }, startedAt: now } : null;
     this.freezeUntil = now + 65;
     this.shakeUntil = now + 190;
-    this.audio.playFail();
-    if (navigator.vibrate) navigator.vibrate(24);
     const result = applyBladeHit(this.lives);
+    this.audio.playBladeHit();
+    this.audio.playLifeLost(result.shouldRestart);
+    if (navigator.vibrate) navigator.vibrate(24);
     this.lives = result.lives;
     this.updateHud();
     window.setTimeout(() => {
@@ -350,6 +355,11 @@ export class Game {
   private showInvalidCut(start: Point, end: Point): void {
     this.invalidLine = { start: { ...start }, end: { ...end }, startedAt: performance.now() };
     this.audio.playInvalid();
+  }
+
+  private showMetalCut(start: Point, end: Point): void {
+    this.invalidLine = { start: { ...start }, end: { ...end }, startedAt: performance.now() };
+    this.audio.playMetalBlock();
   }
 
   private frame(time: number): void {

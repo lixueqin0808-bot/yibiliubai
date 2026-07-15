@@ -32,6 +32,13 @@ const game = new Game(canvas, {
   },
 });
 
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest<HTMLButtonElement>("button");
+  if (!button || button.id === "startGame" || button.id === "sound") return;
+  game.playUiTap();
+});
+
 function renderLevelGrid(): void {
   levelGrid.replaceChildren(...LEVELS.map((level) => {
     const unlocked = level.id <= campaign.unlockedThrough;

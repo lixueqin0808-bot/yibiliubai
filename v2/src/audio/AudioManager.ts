@@ -1,3 +1,34 @@
+import bladeHitUrl from "../assets/audio/blade-hit.wav";
+import cutPaperUrl from "../assets/audio/cut-paper.wav";
+import cutStartUrl from "../assets/audio/cut-start.mp3";
+import cutSuccessUrl from "../assets/audio/cut-success.wav";
+import inkDispersalUrl from "../assets/audio/ink-dispersal.wav";
+import levelCompleteUrl from "../assets/audio/level-complete.wav";
+import lifeLostUrl from "../assets/audio/life-lost.wav";
+import metalBlockUrl from "../assets/audio/metal-block.wav";
+import uiTapUrl from "../assets/audio/ui-tap.wav";
+
+type SampleName = "start" | "success" | "paper" | "dispersal" | "metal" | "blade" | "life" | "complete" | "tap";
+
+interface SampleOptions {
+  volume: number;
+  duration: number;
+  delay?: number;
+  rate?: number;
+}
+
+const SAMPLE_URLS: Record<SampleName, string> = {
+  start: cutStartUrl,
+  success: cutSuccessUrl,
+  paper: cutPaperUrl,
+  dispersal: inkDispersalUrl,
+  metal: metalBlockUrl,
+  blade: bladeHitUrl,
+  life: lifeLostUrl,
+  complete: levelCompleteUrl,
+  tap: uiTapUrl,
+};
+
 export class AudioManager {
   private context: AudioContext | null = null;
   private enabled = localStorage.getItem("yibiliubai-v2-sound") !== "off";
@@ -20,27 +51,62 @@ export class AudioManager {
   }
 
   playStart(): void {
-    this.tone(360, 520, 0.055, 0.025, "triangle");
+    this.sample("start", { volume: 0.2, duration: 0.24, rate: 1.08 });
   }
 
   playSuccess(): void {
-    this.noise(0.075, 0.035, 3200);
-    this.tone(1250, 360, 0.07, 0.032, "triangle");
-    this.tone(155, 92, 0.1, 0.026, "sine", 0.018);
+    this.sample("success", { volume: 0.38, duration: 0.44, rate: 1.08 });
+    this.sample("paper", { volume: 0.13, duration: 0.28, delay: 0.025, rate: 1.06 });
+    this.sample("dispersal", { volume: 0.09, duration: 0.5, delay: 0.09, rate: 1.16 });
   }
 
-  playFail(): void {
-    this.tone(190, 72, 0.16, 0.065, "sawtooth");
-    this.noise(0.07, 0.045, 480);
+  playBladeHit(): void {
+    this.sample("blade", { volume: 0.36, duration: 0.32, rate: 1.05 });
+  }
+
+  playLifeLost(isGameOver: boolean): void {
+    this.sample("life", {
+      volume: isGameOver ? 0.28 : 0.18,
+      duration: isGameOver ? 0.78 : 0.36,
+      delay: 0.08,
+      rate: isGameOver ? 0.72 : 1.14,
+    });
+  }
+
+  playMetalBlock(): void {
+    this.sample("metal", { volume: 0.28, duration: 0.44, rate: 1.04 });
   }
 
   playInvalid(): void {
-    this.tone(270, 230, 0.06, 0.022, "triangle");
+    this.tone(270, 230, 0.06, 0.018, "triangle");
   }
 
   playComplete(): void {
-    this.tone(180, 120, 0.22, 0.07, "sine");
-    this.tone(520, 650, 0.18, 0.035, "triangle", 0.12);
+    this.sample("complete", { volume: 0.4, duration: 1.2, rate: 1 });
+  }
+
+  playTap(): void {
+    this.sample("tap", { volume: 0.08, duration: 0.16, rate: 1.2 });
+  }
+
+  private sample(name: SampleName, options: SampleOptions): void {
+    if (!this.enabled) return;
+    this.unlock();
+    const audio = new Audio(SAMPLE_URLS[name]);
+    audio.preload = "auto";
+    audio.volume = options.volume;
+    audio.playbackRate = options.rate ?? 1;
+    const start = () => {
+      void audio.play().catch(() => {
+        // Browser autoplay policies can still reject a sound triggered after a delayed result.
+      });
+      window.setTimeout(() => {
+        audio.pause();
+        audio.currentTime = 0;
+      }, options.duration * 1000 / audio.playbackRate);
+    };
+    if (options.delay) window.setTimeout(start, options.delay * 1000);
+    else start();
   }
 
   private tone(
@@ -68,23 +134,4 @@ export class AudioManager {
     oscillator.stop(start + duration + 0.02);
   }
 
-  private noise(duration: number, volume: number, cutoff: number): void {
-    if (!this.enabled) return;
-    this.unlock();
-    if (!this.context) return;
-    const frameCount = Math.ceil(this.context.sampleRate * duration);
-    const buffer = this.context.createBuffer(1, frameCount, this.context.sampleRate);
-    const channel = buffer.getChannelData(0);
-    for (let index = 0; index < frameCount; index += 1) channel[index] = Math.random() * 2 - 1;
-    const source = this.context.createBufferSource();
-    const filter = this.context.createBiquadFilter();
-    const gain = this.context.createGain();
-    filter.type = "lowpass";
-    filter.frequency.value = cutoff;
-    gain.gain.setValueAtTime(volume, this.context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, this.context.currentTime + duration);
-    source.buffer = buffer;
-    source.connect(filter).connect(gain).connect(this.context.destination);
-    source.start();
-  }
 }
