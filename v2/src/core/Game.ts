@@ -282,7 +282,8 @@ export class Game {
     const kept = bladeSides[0] ? result.positive : result.negative;
     const removed = bladeSides[0] ? result.negative : result.positive;
     this.polygon = kept;
-    this.physics.forEach((blade) => blade.setBoundary(this.polygon));
+    const metalObstacles = this.metalObstacles();
+    this.physics.forEach((blade) => blade.setBoundary(this.polygon, metalObstacles));
     this.effectiveCuts += 1;
     const now = performance.now();
     const cutStart = result.intersections[0];
@@ -531,48 +532,49 @@ export class Game {
       if (length < 1) return;
       const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
       const edgeThickness = 10;
-      const halfThickness = edgeThickness / 2;
-      // The map-facing side is shorter by one strip thickness, leaving 45-degree end cuts.
       const endInset = edgeThickness;
+      const midpoint = {
+        x: (metal.start.x + metal.end.x) / 2,
+        y: (metal.start.y + metal.end.y) / 2,
+      };
+      const positiveNormal = { x: -Math.sin(angle), y: Math.cos(angle) };
+      const interiorSign = pointInPolygon({
+        x: midpoint.x + positiveNormal.x * 2,
+        y: midpoint.y + positiveNormal.y * 2,
+      }, this.polygon) ? 1 : -1;
+
+      ctx.save();
+      ctx.translate(metal.start.x, metal.start.y);
+      ctx.rotate(angle);
+      // In local space, y=0 is the original polygon edge (the long side).
+      // Mirroring when necessary makes positive y always point into the retained map.
+      ctx.scale(1, interiorSign);
+      ctx.globalAlpha = 0.92;
+      ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
+      ctx.shadowBlur = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(length, 0);
+      ctx.lineTo(length - endInset, edgeThickness);
+      ctx.lineTo(endInset, edgeThickness);
+      ctx.closePath();
+      ctx.clip();
+
       if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
-        ctx.save();
-        ctx.translate(metal.start.x, metal.start.y);
-        ctx.rotate(angle);
-        ctx.globalAlpha = 0.92;
-        ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
-        ctx.shadowBlur = 3;
         const pattern = ctx.createPattern(this.inkIronEdgeImage, "repeat");
-        ctx.beginPath();
-        ctx.moveTo(0, halfThickness);
-        ctx.lineTo(length, halfThickness);
-        ctx.lineTo(length - endInset, -halfThickness);
-        ctx.lineTo(endInset, -halfThickness);
-        ctx.closePath();
-        ctx.clip();
         if (pattern) {
           const scale = edgeThickness / this.inkIronEdgeImage.naturalHeight;
-          pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, -halfThickness]));
+          pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
           ctx.fillStyle = pattern;
-          ctx.fillRect(0, -halfThickness, length, edgeThickness);
+          ctx.fillRect(0, 0, length, edgeThickness);
         } else {
-          ctx.drawImage(this.inkIronEdgeImage, 0, -halfThickness, length, edgeThickness);
+          ctx.drawImage(this.inkIronEdgeImage, 0, 0, length, edgeThickness);
         }
-        ctx.restore();
-        return;
+      } else {
+        ctx.fillStyle = "#4b4a45";
+        ctx.fillRect(0, 0, length, edgeThickness);
       }
-      ctx.lineWidth = 12;
-      ctx.strokeStyle = "#353535";
-      ctx.shadowBlur = 5;
-      ctx.shadowColor = "#050505";
-      ctx.beginPath();
-      ctx.moveTo(metal.start.x, metal.start.y);
-      ctx.lineTo(metal.end.x, metal.end.y);
-      ctx.stroke();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "#aaa9a1";
-      ctx.stroke();
-      ctx.lineWidth = 12;
-      ctx.strokeStyle = "#353535";
+      ctx.restore();
     });
     ctx.restore();
   }
@@ -742,6 +744,37 @@ export class Game {
     return { x: total.x / polygon.length, y: total.y / polygon.length };
   }
 
+  /** The rendered metal strip is also a solid inset obstacle for blade physics. */
+  private metalObstacles(): Polygon[] {
+    if (!this.level.metalEdges) return [];
+    const edgeThickness = 10;
+    return visibleBoundarySegments(this.polygon, this.level.metalEdges).map((metal) => {
+      const delta = { x: metal.end.x - metal.start.x, y: metal.end.y - metal.start.y };
+      const length = Math.hypot(delta.x, delta.y);
+      if (length < 1) return [metal.start, metal.end, metal.end, metal.start];
+      const direction = { x: delta.x / length, y: delta.y / length };
+      const positiveNormal = { x: -direction.y, y: direction.x };
+      const midpoint = { x: (metal.start.x + metal.end.x) / 2, y: (metal.start.y + metal.end.y) / 2 };
+      const interiorSign = pointInPolygon({
+        x: midpoint.x + positiveNormal.x * 2,
+        y: midpoint.y + positiveNormal.y * 2,
+      }, this.polygon) ? 1 : -1;
+      const inward = { x: positiveNormal.x * interiorSign, y: positiveNormal.y * interiorSign };
+      return [
+        metal.start,
+        metal.end,
+        {
+          x: metal.end.x - direction.x * edgeThickness + inward.x * edgeThickness,
+          y: metal.end.y - direction.y * edgeThickness + inward.y * edgeThickness,
+        },
+        {
+          x: metal.start.x + direction.x * edgeThickness + inward.x * edgeThickness,
+          y: metal.start.y + direction.y * edgeThickness + inward.y * edgeThickness,
+        },
+      ];
+    });
+  }
+
   private createPhysics(level: LevelDefinition): PhysicsWorld[] {
     return level.blades.map((blade) => new PhysicsWorld(
       this.polygon,
@@ -749,6 +782,7 @@ export class Game {
       bladeCollisionRadius(blade),
       blade.velocity,
       blade.speed,
+      this.metalObstacles(),
     ));
   }
 

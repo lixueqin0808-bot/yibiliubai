@@ -8,17 +8,17 @@ function normalize(vector: Point): Point {
   return { x: vector.x / length, y: vector.y / length };
 }
 
-function closestEdge(point: Point, polygon: Polygon): { start: Point; end: Point } {
+function closestEdge(point: Point, polygon: Polygon, obstacles: Polygon[]): { start: Point; end: Point } {
   let closest = { start: polygon[0], end: polygon[1] };
   let distance = Number.POSITIVE_INFINITY;
-  polygon.forEach((start, index) => {
-    const end = polygon[(index + 1) % polygon.length];
+  [polygon, ...obstacles].forEach((boundary) => boundary.forEach((start, index) => {
+    const end = boundary[(index + 1) % boundary.length];
     const nextDistance = distanceToSegment(point, start, end);
     if (nextDistance < distance) {
       distance = nextDistance;
       closest = { start, end };
     }
-  });
+  }));
   return closest;
 }
 
@@ -38,6 +38,7 @@ export class PhysicsWorld {
   private positionValue: Point;
   private velocityValue: Point;
   private polygon: Polygon;
+  private obstacles: Polygon[];
   private bounceCount = 0;
 
   constructor(
@@ -46,8 +47,10 @@ export class PhysicsWorld {
     private readonly radius: number,
     velocity: Point,
     private readonly targetSpeed: number,
+    obstacles: Polygon[] = [],
   ) {
     this.polygon = polygon;
+    this.obstacles = obstacles;
     this.positionValue = { ...position };
     this.velocityValue = this.withTargetSpeed(velocity);
   }
@@ -60,15 +63,17 @@ export class PhysicsWorld {
     return { ...this.velocityValue };
   }
 
-  reset(position: Point, velocity: Point, polygon: Polygon): void {
+  reset(position: Point, velocity: Point, polygon: Polygon, obstacles: Polygon[] = []): void {
     this.positionValue = { ...position };
     this.velocityValue = this.withTargetSpeed(velocity);
     this.polygon = polygon;
+    this.obstacles = obstacles;
     this.bounceCount = 0;
   }
 
-  setBoundary(polygon: Polygon): void {
+  setBoundary(polygon: Polygon, obstacles: Polygon[] = this.obstacles): void {
     this.polygon = polygon;
+    this.obstacles = obstacles;
     this.reconcileBoundary();
   }
 
@@ -108,14 +113,22 @@ export class PhysicsWorld {
 
   private isInside(point: Point): boolean {
     if (!pointInPolygon(point, this.polygon)) return false;
-    return this.polygon.every((start, index) => {
+    const clearsOuterBoundary = this.polygon.every((start, index) => {
       const end = this.polygon[(index + 1) % this.polygon.length];
       return distanceToSegment(point, start, end) >= this.radius;
     });
+    if (!clearsOuterBoundary) return false;
+    return this.obstacles.every((obstacle) => (
+      !pointInPolygon(point, obstacle)
+      && obstacle.every((start, index) => {
+        const end = obstacle[(index + 1) % obstacle.length];
+        return distanceToSegment(point, start, end) >= this.radius;
+      })
+    ));
   }
 
   private reflectFromClosestEdge(): void {
-    const { start, end } = closestEdge(this.positionValue, this.polygon);
+    const { start, end } = closestEdge(this.positionValue, this.polygon, this.obstacles);
     const tangent = normalize({ x: end.x - start.x, y: end.y - start.y });
     const normal = { x: -tangent.y, y: tangent.x };
     const dot = this.velocityValue.x * normal.x + this.velocityValue.y * normal.y;

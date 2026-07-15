@@ -22,6 +22,21 @@ describe("PhysicsWorld", () => {
     expect(world.position.x).toBeLessThan(190);
   });
 
+  it("reflects from the inset short side of a metal edge obstacle", () => {
+    const insetMetalEdge = [[
+      { x: 160, y: 50 },
+      { x: 160, y: 150 },
+      { x: 150, y: 140 },
+      { x: 150, y: 60 },
+    ]];
+    const world = new PhysicsWorld(box, { x: 100, y: 100 }, 10, { x: 2, y: 0 }, 2, insetMetalEdge);
+
+    for (let index = 0; index < 30; index += 1) world.update(16.7);
+
+    expect(world.velocity.x).toBeLessThan(0);
+    expect(world.position.x).toBeLessThan(141);
+  });
+
   it("moves a blade away from a freshly cut boundary before the next frame", () => {
     const world = new PhysicsWorld(box, { x: 100, y: 20 }, 10, { x: 1, y: 1 }, 2);
     const retainedAfterCut = [
