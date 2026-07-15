@@ -74,3 +74,21 @@ test("returning players choose a level instead of being sent to the latest unloc
   await expect(page.locator(".level-tile:not(:disabled)")).toHaveCount(15);
   await expect(page.locator("#game")).toHaveAttribute("data-level", "1");
 });
+
+test("locked edges render from the edge strip without a separate corner sprite", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("yibiliubai-v2-campaign", JSON.stringify({ unlockedThrough: 15, completed: [] }));
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.locator("#startGame").click();
+  await page.getByRole("button", { name: "进入第 4 关" }).click();
+  await expect(page.locator("#game")).toHaveAttribute("data-level", "4");
+
+  const loadedCornerSprite = await page.evaluate(() => performance
+    .getEntriesByType("resource")
+    .some((entry) => entry.name.includes("ink-iron-corner-joint")));
+  expect(loadedCornerSprite).toBe(false);
+
+  await page.screenshot({ path: "test-results/locked-edge-level.png", fullPage: true });
+});

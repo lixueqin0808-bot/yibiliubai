@@ -11,7 +11,6 @@ import dangerMarkUrl from "../assets/danger-mark.webp";
 import inkBladeFourUrl from "../assets/ink-blade-four.webp";
 import inkBladeFiveUrl from "../assets/ink-blade-five.webp";
 import inkIronEdgeUrl from "../assets/ink-iron-edge-strip.webp";
-import inkIronCornerUrl from "../assets/ink-iron-corner-joint.webp";
 import inkTextureUrl from "../assets/ink-slate-map-texture.webp";
 
 interface GameElements {
@@ -79,9 +78,7 @@ export class Game {
   private readonly inkBladeFourImage = loadImage(inkBladeFourUrl);
   private readonly inkBladeFiveImage = loadImage(inkBladeFiveUrl);
   private readonly inkIronEdgeImage = loadImage(inkIronEdgeUrl);
-  private readonly inkIronCornerImage = loadImage(inkIronCornerUrl);
   private readonly inkTextureImage = loadImage(inkTextureUrl);
-  private ironEdgeTile: HTMLCanvasElement | null = null;
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(
@@ -541,9 +538,9 @@ export class Game {
     if (!this.level.metalEdges) return;
     ctx.save();
     ctx.lineCap = "round";
-    const jointPoints = new Map<string, Point>();
     visibleBoundarySegments(this.polygon, this.level.metalEdges).forEach((metal) => {
       const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
+      if (length < 1) return;
       const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
       const midpoint = { x: (metal.start.x + metal.end.x) / 2, y: (metal.start.y + metal.end.y) / 2 };
       const center = this.polygonCentroid(this.polygon);
@@ -558,20 +555,21 @@ export class Game {
         ctx.globalAlpha = 0.92;
         ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
         ctx.shadowBlur = 3;
-        const pattern = this.getIronEdgePattern(ctx);
+        const pattern = ctx.createPattern(this.inkIronEdgeImage, "repeat");
         if (pattern) {
-          pattern.setTransform(new DOMMatrix([0.1, 0, 0, 0.1, 0, -5]));
+          const edgeThickness = 10;
+          const scale = edgeThickness / this.inkIronEdgeImage.naturalHeight;
+          pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, -edgeThickness / 2]));
+          ctx.strokeStyle = pattern;
+          ctx.lineWidth = edgeThickness;
           ctx.beginPath();
-          ctx.rect(0, -5, length, 10);
-          ctx.clip();
-          ctx.fillStyle = pattern;
-          ctx.fillRect(0, -5, length, 10);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(length, 0);
+          ctx.stroke();
         } else {
-          ctx.drawImage(this.inkIronEdgeImage, 0, 176, this.inkIronEdgeImage.naturalWidth, 98, 0, -5, length, 10);
+          ctx.drawImage(this.inkIronEdgeImage, 0, -5, length, 10);
         }
         ctx.restore();
-        jointPoints.set(`${metal.start.x}:${metal.start.y}`, { x: metal.start.x + leftNormal.x * inset, y: metal.start.y + leftNormal.y * inset });
-        jointPoints.set(`${metal.end.x}:${metal.end.y}`, { x: metal.end.x + leftNormal.x * inset, y: metal.end.y + leftNormal.y * inset });
         return;
       }
       ctx.lineWidth = 12;
@@ -588,29 +586,7 @@ export class Game {
       ctx.lineWidth = 12;
       ctx.strokeStyle = "#353535";
     });
-    if (this.inkIronCornerImage.complete && this.inkIronCornerImage.naturalWidth > 0) {
-      for (const point of jointPoints.values()) {
-        const size = 13;
-        ctx.save();
-        ctx.globalAlpha = 0.9;
-        ctx.shadowColor = "rgba(0, 0, 0, 0.62)";
-        ctx.shadowBlur = 2;
-        ctx.drawImage(this.inkIronCornerImage, point.x - size / 2, point.y - size / 2, size, size);
-        ctx.restore();
-      }
-    }
     ctx.restore();
-  }
-
-  private getIronEdgePattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-    if (!this.ironEdgeTile && this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
-      this.ironEdgeTile = document.createElement("canvas");
-      this.ironEdgeTile.width = this.inkIronEdgeImage.naturalWidth;
-      this.ironEdgeTile.height = 98;
-      const tileContext = this.ironEdgeTile.getContext("2d");
-      tileContext?.drawImage(this.inkIronEdgeImage, 0, 176, this.inkIronEdgeImage.naturalWidth, 98, 0, 0, this.inkIronEdgeImage.naturalWidth, 98);
-    }
-    return this.ironEdgeTile ? ctx.createPattern(this.ironEdgeTile, "repeat") : null;
   }
 
   private drawPreview(ctx: CanvasRenderingContext2D): void {

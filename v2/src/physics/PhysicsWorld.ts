@@ -22,6 +22,14 @@ function closestEdge(point: Point, polygon: Polygon): { start: Point; end: Point
   return closest;
 }
 
+function polygonCentroid(polygon: Polygon): Point {
+  const sum = polygon.reduce((total, point) => ({
+    x: total.x + point.x,
+    y: total.y + point.y,
+  }), { x: 0, y: 0 });
+  return { x: sum.x / polygon.length, y: sum.y / polygon.length };
+}
+
 /**
  * Deterministic arcade motion: blades reflect from the map boundary instead of
  * inheriting rigid-body friction that makes them appear to roll along an edge.
@@ -61,6 +69,7 @@ export class PhysicsWorld {
 
   setBoundary(polygon: Polygon): void {
     this.polygon = polygon;
+    this.reconcileBoundary();
   }
 
   update(milliseconds: number): void {
@@ -124,6 +133,50 @@ export class PhysicsWorld {
       y: reflected.x * sin + reflected.y * cos,
     };
     this.velocityValue = this.withTargetSpeed(reflected);
+  }
+
+  /**
+   * A cut keeps the blade center on the retained side, but its radius can still
+   * overlap the freshly created edge. Reposition it before the next frame so it
+   * cannot endlessly reflect in a new corner.
+   */
+  private reconcileBoundary(): void {
+    if (this.isInside(this.positionValue)) return;
+
+    const origin = { ...this.positionValue };
+    const center = polygonCentroid(this.polygon);
+    const candidates: Point[] = [center];
+    const toCenter = normalize({ x: center.x - origin.x, y: center.y - origin.y });
+
+    for (const multiplier of [1, 1.75, 2.5, 3.5, 5]) {
+      candidates.push({
+        x: origin.x + toCenter.x * this.radius * multiplier,
+        y: origin.y + toCenter.y * this.radius * multiplier,
+      });
+    }
+
+    for (const multiplier of [1.25, 2, 3, 4.5]) {
+      for (let index = 0; index < 24; index += 1) {
+        const angle = (Math.PI * 2 * index) / 24;
+        candidates.push({
+          x: origin.x + Math.cos(angle) * this.radius * multiplier,
+          y: origin.y + Math.sin(angle) * this.radius * multiplier,
+        });
+      }
+    }
+
+    const safePosition = candidates.find((candidate) => this.isInside(candidate));
+    if (safePosition) {
+      this.positionValue = safePosition;
+      this.velocityValue = this.withTargetSpeed({
+        x: this.velocityValue.x + (safePosition.x - origin.x) * 0.12,
+        y: this.velocityValue.y + (safePosition.y - origin.y) * 0.12,
+      });
+      return;
+    }
+
+    this.positionValue = center;
+    this.velocityValue = this.withTargetSpeed({ x: -this.velocityValue.y, y: this.velocityValue.x });
   }
 
   private withTargetSpeed(vector: Point): Point {

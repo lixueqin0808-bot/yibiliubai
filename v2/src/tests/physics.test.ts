@@ -15,4 +15,20 @@ describe("PhysicsWorld", () => {
     expect(world.velocity.x).toBeLessThan(0);
     expect(world.position.x).toBeLessThan(190);
   });
+
+  it("moves a blade away from a freshly cut boundary before the next frame", () => {
+    const world = new PhysicsWorld(box, { x: 100, y: 20 }, 10, { x: 1, y: 1 }, 2);
+    const retainedAfterCut = [
+      { x: 0, y: 25 },
+      { x: 200, y: 25 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ];
+
+    world.setBoundary(retainedAfterCut);
+
+    expect(world.position.y).toBeGreaterThanOrEqual(35);
+    world.update(16.7);
+    expect(world.position.y).toBeGreaterThanOrEqual(35);
+  });
 });
