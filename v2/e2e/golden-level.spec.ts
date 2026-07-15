@@ -61,3 +61,15 @@ test("desktop keeps the portrait game centered without overflow", async ({ page 
   await page.mouse.up();
   await page.screenshot({ path: "test-results/golden-desktop.png", fullPage: true });
 });
+
+test("returning players choose a level instead of being sent to the latest unlock", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("yibiliubai-v2-campaign", JSON.stringify({ unlockedThrough: 5, completed: [1, 2, 3, 4, 5] }));
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.locator("#startGame").click();
+  await expect(page.locator("#levelDialog")).toBeVisible();
+  await expect(page.locator(".level-tile:not(:disabled)")).toHaveCount(5);
+  await expect(page.locator("#game")).toHaveAttribute("data-level", "1");
+});

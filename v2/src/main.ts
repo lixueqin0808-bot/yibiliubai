@@ -58,8 +58,12 @@ function openLevels(): void {
 }
 
 required<HTMLButtonElement>("#startGame").addEventListener("click", () => {
-  game.startLevel(campaign.unlockedThrough);
-  startScreen.hidden = true;
+  if (campaign.unlockedThrough === 1) {
+    game.startLevel(1);
+    startScreen.hidden = true;
+  } else {
+    openLevels();
+  }
 });
 required<HTMLButtonElement>("#openTutorial").addEventListener("click", () => tutorialDialog.showModal());
 required<HTMLButtonElement>("#closeTutorial").addEventListener("click", () => tutorialDialog.close());

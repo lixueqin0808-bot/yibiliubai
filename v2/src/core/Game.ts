@@ -88,6 +88,7 @@ export class Game {
     if (!context) throw new Error("Canvas 2D is unavailable");
     this.context = context;
     this.elements = elements;
+    this.canvas.dataset.level = String(this.level.id);
     this.resizeCanvas();
     this.bindPointerEvents();
     window.addEventListener("resize", () => this.resizeCanvas());
