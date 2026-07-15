@@ -453,7 +453,6 @@ export class Game {
     ctx.fillRect(0, 180, LOGICAL_WIDTH, 500);
     ctx.restore();
 
-    this.drawMapOutline(ctx);
   }
 
   /** Keeps the map material at a fixed world scale while polygons are cut into new shapes. */
@@ -531,6 +530,10 @@ export class Game {
       const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
       if (length < 1) return;
       const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
+      const edgeThickness = 10;
+      const halfThickness = edgeThickness / 2;
+      // The map-facing side is shorter by one strip thickness, leaving 45-degree end cuts.
+      const endInset = edgeThickness;
       if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
         ctx.save();
         ctx.translate(metal.start.x, metal.start.y);
@@ -539,23 +542,20 @@ export class Game {
         ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
         ctx.shadowBlur = 3;
         const pattern = ctx.createPattern(this.inkIronEdgeImage, "repeat");
+        ctx.beginPath();
+        ctx.moveTo(0, halfThickness);
+        ctx.lineTo(length, halfThickness);
+        ctx.lineTo(length - endInset, -halfThickness);
+        ctx.lineTo(endInset, -halfThickness);
+        ctx.closePath();
+        ctx.clip();
         if (pattern) {
-          const edgeThickness = 10;
           const scale = edgeThickness / this.inkIronEdgeImage.naturalHeight;
-          const halfThickness = edgeThickness / 2;
-          const bevel = halfThickness;
           pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, -halfThickness]));
-          ctx.beginPath();
-          ctx.moveTo(-bevel, -halfThickness);
-          ctx.lineTo(length - bevel, -halfThickness);
-          ctx.lineTo(length + bevel, halfThickness);
-          ctx.lineTo(bevel, halfThickness);
-          ctx.closePath();
-          ctx.clip();
           ctx.fillStyle = pattern;
-          ctx.fillRect(-bevel, -halfThickness, length + edgeThickness, edgeThickness);
+          ctx.fillRect(0, -halfThickness, length, edgeThickness);
         } else {
-          ctx.drawImage(this.inkIronEdgeImage, -5, -5, length + 10, 10);
+          ctx.drawImage(this.inkIronEdgeImage, 0, -halfThickness, length, edgeThickness);
         }
         ctx.restore();
         return;
@@ -575,35 +575,6 @@ export class Game {
       ctx.strokeStyle = "#353535";
     });
     ctx.restore();
-  }
-
-  private drawMapOutline(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    ctx.lineCap = "butt";
-    this.polygon.forEach((start, index) => {
-      const end = this.polygon[(index + 1) % this.polygon.length];
-      if (this.isLockedBoundary(start, end)) return;
-      ctx.strokeStyle = "rgba(16, 16, 15, 0.84)";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(187, 187, 175, 0.12)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-      ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  private isLockedBoundary(start: Point, end: Point): boolean {
-    return this.level.metalEdges?.some((metal) => (
-      distanceToSegment(start, metal.start, metal.end) <= 0.75
-      && distanceToSegment(end, metal.start, metal.end) <= 0.75
-    )) ?? false;
   }
 
   private drawPreview(ctx: CanvasRenderingContext2D): void {
