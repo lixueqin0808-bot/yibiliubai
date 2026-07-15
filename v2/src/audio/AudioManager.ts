@@ -75,7 +75,7 @@ export class AudioManager {
   }
 
   playMetalBlock(): void {
-    this.sample("metal", { volume: 0.34, duration: 0.56, rate: 1.02 });
+    this.sample("metal", { volume: 0.22, duration: 0.5, rate: 1.02 });
   }
 
   playInvalid(): void {
