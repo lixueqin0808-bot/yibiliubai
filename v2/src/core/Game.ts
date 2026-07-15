@@ -353,7 +353,7 @@ export class Game {
     this.callbacks.onLevelComplete?.(this.level.id);
     window.setTimeout(() => {
       this.elements.resultDialog.showModal();
-      this.audio.playComplete();
+      window.setTimeout(() => this.audio.playComplete(), 340);
     }, 360);
   }
 

@@ -71,10 +71,11 @@ export class AudioManager {
       delay: 0.13,
       rate: isGameOver ? 0.72 : 1.14,
     });
+    this.tone(150, 76, isGameOver ? 0.28 : 0.17, isGameOver ? 0.08 : 0.06, "sine", 0.13);
   }
 
   playMetalBlock(): void {
-    this.sample("metal", { volume: 0.28, duration: 0.44, rate: 1.04 });
+    this.sample("metal", { volume: 0.34, duration: 0.56, rate: 1.02 });
   }
 
   playInvalid(): void {
