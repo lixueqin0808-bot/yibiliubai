@@ -25,8 +25,8 @@
 - Modify: `src/assets/ink-slate-map-texture.webp`
 - Modify: `src/assets/ink-iron-edge-strip.webp`
 
-- [ ] Copy the approved four-blade, five-blade, map texture, and edge strip into the existing asset names.
-- [ ] Verify each replacement exists and has non-zero size.
+- [x] Copy the approved four-blade, five-blade, map texture, and edge strip into the existing asset names.
+- [x] Verify each replacement exists and has non-zero size.
 
 ### Task 2: Render continuous locked edges
 
@@ -34,10 +34,10 @@
 - Modify: `src/core/Game.ts`
 - Test: `src/tests/metalEdges.test.ts`
 
-- [ ] Remove corner-joint image loading and all independent corner sprite drawing.
-- [ ] Draw each visible locked segment from the repeated edge texture with round line caps, so endpoint overlap comes from the same material.
-- [ ] Keep `visibleBoundarySegments` as the source of truth so removed map pieces remove their locked edge portions.
-- [ ] Run the metal-edge unit tests.
+- [x] Remove corner-joint image loading and all independent corner sprite drawing.
+- [x] Draw each visible locked segment from the repeated edge texture with round line caps, so endpoint overlap comes from the same material.
+- [x] Keep `visibleBoundarySegments` as the source of truth so removed map pieces remove their locked edge portions.
+- [x] Run the metal-edge unit tests.
 
 ### Task 3: Reconcile blades after cuts
 
@@ -46,11 +46,11 @@
 - Modify: `src/core/Game.ts`
 - Test: `src/tests/physics.test.ts`
 
-- [ ] Add a boundary reconciliation method that finds a radius-safe interior position after `setBoundary`.
-- [ ] On failure to find one, push the blade inward from the closest edge with deterministic direction sampling.
-- [ ] Add a regression test where a polygon boundary moves past a blade near a corner.
-- [ ] Call reconciliation through the existing `setBoundary` path after every successful cut.
-- [ ] Run physics and full unit tests.
+- [x] Add a boundary reconciliation method that finds a radius-safe interior position after `setBoundary`.
+- [x] On failure to find one, push the blade inward from the closest edge with deterministic direction sampling.
+- [x] Add a regression test where a polygon boundary moves past a blade near a corner.
+- [x] Call reconciliation through the existing `setBoundary` path after every successful cut.
+- [x] Run physics and full unit tests.
 
 ### Task 4: Build and browser verification
 
@@ -58,7 +58,7 @@
 - Verify: `src/core/Game.ts`
 - Verify: `e2e/golden-level.spec.ts`
 
-- [ ] Run `npm.cmd run build`.
-- [ ] Run `npm.cmd run test`.
-- [ ] Run `npm.cmd run test:e2e`.
-- [ ] Capture desktop and mobile screenshots and check that the map is visible, both blade variants render, and locked edges have no separate corner buttons.
+- [x] Run `npm.cmd run build`.
+- [x] Run `npm.cmd run test`.
+- [x] Run `npm.cmd run test:e2e`.
+- [x] Capture desktop and mobile screenshots and check that the map is visible, both blade variants render, and locked edges have no separate corner buttons.
