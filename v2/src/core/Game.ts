@@ -3,7 +3,7 @@ import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
 import { distanceToSegment, lineSide, pointInPolygon, polygonArea, segmentIntersection, visibleBoundarySegments } from "../geometry/polygon";
-import { LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
+import { bladeCollisionRadius, LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
 import backgroundUrl from "../assets/xuan-paper-background.webp";
@@ -201,7 +201,7 @@ export class Game {
         this.preview!.start,
         this.preview!.end,
         blade.position,
-        this.level.blades[index].radius + 2,
+        bladeCollisionRadius(this.level.blades[index]) + 2,
       ));
       if (this.preview.danger) {
         this.handleBladeHit(this.dangerBladePosition(this.preview.start, this.preview.end), this.preview.start, this.preview.end);
@@ -252,7 +252,7 @@ export class Game {
       start,
       end,
       blade.position,
-      this.level.blades[index].radius + 2,
+      bladeCollisionRadius(this.level.blades[index]) + 2,
     ));
     if (hitBlade) {
       this.handleBladeHit(hitBlade.position, start, end);
@@ -395,7 +395,7 @@ export class Game {
         if (this.preview && sweptCircleHitsSegment(
           lastPosition,
           blade.position,
-          this.level.blades[index].radius + 2,
+          bladeCollisionRadius(this.level.blades[index]) + 2,
           this.preview.start,
           this.preview.end,
         )) this.handleBladeHit(blade.position, this.preview.start, this.preview.end);
@@ -453,17 +453,7 @@ export class Game {
     ctx.fillRect(0, 180, LOGICAL_WIDTH, 500);
     ctx.restore();
 
-    ctx.save();
-    ctx.beginPath();
-    this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-    ctx.closePath();
-    ctx.strokeStyle = "rgba(16, 16, 15, 0.84)";
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(187, 187, 175, 0.12)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
+    this.drawMapOutline(ctx);
   }
 
   /** Keeps the map material at a fixed world scale while polygons are cut into new shapes. */
@@ -499,7 +489,7 @@ export class Game {
       ctx.restore();
       return;
     }
-    const bladeScale = blade.radius / 18;
+    const bladeScale = bladeCollisionRadius(blade) / 18;
     ctx.scale(bladeScale, bladeScale);
     for (let index = 0; index < 4; index += 1) {
       ctx.rotate(Math.PI / 2);
@@ -537,21 +527,14 @@ export class Game {
   private drawMetalSegments(ctx: CanvasRenderingContext2D): void {
     if (!this.level.metalEdges) return;
     ctx.save();
-    ctx.lineCap = "round";
     visibleBoundarySegments(this.polygon, this.level.metalEdges).forEach((metal) => {
       const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
       if (length < 1) return;
       const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
-      const midpoint = { x: (metal.start.x + metal.end.x) / 2, y: (metal.start.y + metal.end.y) / 2 };
-      const center = this.polygonCentroid(this.polygon);
-      const leftNormal = { x: -(metal.end.y - metal.start.y) / length, y: (metal.end.x - metal.start.x) / length };
-      const inward = (center.x - midpoint.x) * leftNormal.x + (center.y - midpoint.y) * leftNormal.y >= 0 ? 1 : -1;
-      const inset = 5 * inward;
       if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
         ctx.save();
         ctx.translate(metal.start.x, metal.start.y);
         ctx.rotate(angle);
-        ctx.translate(0, inset);
         ctx.globalAlpha = 0.92;
         ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
         ctx.shadowBlur = 3;
@@ -559,15 +542,20 @@ export class Game {
         if (pattern) {
           const edgeThickness = 10;
           const scale = edgeThickness / this.inkIronEdgeImage.naturalHeight;
-          pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, -edgeThickness / 2]));
-          ctx.strokeStyle = pattern;
-          ctx.lineWidth = edgeThickness;
+          const halfThickness = edgeThickness / 2;
+          const bevel = halfThickness;
+          pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, -halfThickness]));
           ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(length, 0);
-          ctx.stroke();
+          ctx.moveTo(-bevel, -halfThickness);
+          ctx.lineTo(length - bevel, -halfThickness);
+          ctx.lineTo(length + bevel, halfThickness);
+          ctx.lineTo(bevel, halfThickness);
+          ctx.closePath();
+          ctx.clip();
+          ctx.fillStyle = pattern;
+          ctx.fillRect(-bevel, -halfThickness, length + edgeThickness, edgeThickness);
         } else {
-          ctx.drawImage(this.inkIronEdgeImage, 0, -5, length, 10);
+          ctx.drawImage(this.inkIronEdgeImage, -5, -5, length + 10, 10);
         }
         ctx.restore();
         return;
@@ -587,6 +575,35 @@ export class Game {
       ctx.strokeStyle = "#353535";
     });
     ctx.restore();
+  }
+
+  private drawMapOutline(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.lineCap = "butt";
+    this.polygon.forEach((start, index) => {
+      const end = this.polygon[(index + 1) % this.polygon.length];
+      if (this.isLockedBoundary(start, end)) return;
+      ctx.strokeStyle = "rgba(16, 16, 15, 0.84)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(187, 187, 175, 0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  private isLockedBoundary(start: Point, end: Point): boolean {
+    return this.level.metalEdges?.some((metal) => (
+      distanceToSegment(start, metal.start, metal.end) <= 0.75
+      && distanceToSegment(end, metal.start, metal.end) <= 0.75
+    )) ?? false;
   }
 
   private drawPreview(ctx: CanvasRenderingContext2D): void {
@@ -758,7 +775,7 @@ export class Game {
     return level.blades.map((blade) => new PhysicsWorld(
       this.polygon,
       blade,
-      blade.radius,
+      bladeCollisionRadius(blade),
       blade.velocity,
       blade.speed,
     ));
@@ -769,7 +786,7 @@ export class Game {
       start,
       end,
       blade.position,
-      this.level.blades[index].radius + 2,
+      bladeCollisionRadius(this.level.blades[index]) + 2,
     ));
     return hit?.position ?? this.physics[0].position;
   }

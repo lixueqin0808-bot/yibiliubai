@@ -89,6 +89,10 @@ test("locked edges render from the edge strip without a separate corner sprite",
     .getEntriesByType("resource")
     .some((entry) => entry.name.includes("ink-iron-corner-joint")));
   expect(loadedCornerSprite).toBe(false);
+  const loadedEdgeStrip = await page.evaluate(() => performance
+    .getEntriesByType("resource")
+    .some((entry) => entry.name.includes("ink-iron-edge-strip")));
+  expect(loadedEdgeStrip).toBe(true);
 
   await page.screenshot({ path: "test-results/locked-edge-level.png", fullPage: true });
 });

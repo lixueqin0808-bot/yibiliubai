@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { bladeCollisionRadius } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 
 const box = [
@@ -9,6 +10,11 @@ const box = [
 ];
 
 describe("PhysicsWorld", () => {
+  it("uses sprite-sized collision radii for the two blade variants", () => {
+    expect(bladeCollisionRadius({ variant: "four" })).toBe(19);
+    expect(bladeCollisionRadius({ variant: "five" })).toBe(25);
+  });
+
   it("reflects away from a wall instead of following it", () => {
     const world = new PhysicsWorld(box, { x: 180, y: 100 }, 10, { x: 2, y: 0.1 }, 2);
     for (let index = 0; index < 20; index += 1) world.update(16.7);

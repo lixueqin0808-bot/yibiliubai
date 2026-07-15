@@ -20,6 +20,11 @@ export interface LevelDefinition {
   metalEdges?: BoundarySegment[];
 }
 
+/** Matches the rendered sprite footprint instead of the older placeholder radius. */
+export function bladeCollisionRadius(blade: Pick<BladeConfig, "variant">): number {
+  return blade.variant === "five" ? 25 : 19;
+}
+
 const levelOne: Polygon = [
   { x: 101, y: 252 }, { x: 290, y: 242 }, { x: 303, y: 316 }, { x: 295, y: 581 },
   { x: 262, y: 609 }, { x: 114, y: 599 }, { x: 90, y: 538 }, { x: 93, y: 310 },
