@@ -61,14 +61,14 @@ export class AudioManager {
   }
 
   playBladeHit(): void {
-    this.sample("blade", { volume: 0.36, duration: 0.32, rate: 1.05 });
+    this.sample("blade", { volume: 0.28, duration: 0.24, rate: 1.08 });
   }
 
   playLifeLost(isGameOver: boolean): void {
     this.sample("life", {
-      volume: isGameOver ? 0.28 : 0.18,
+      volume: isGameOver ? 0.4 : 0.32,
       duration: isGameOver ? 0.78 : 0.36,
-      delay: 0.08,
+      delay: 0.13,
       rate: isGameOver ? 0.72 : 1.14,
     });
   }

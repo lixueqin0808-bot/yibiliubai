@@ -2,7 +2,7 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
-import { distanceToSegment, lineSide, pointInPolygon, polygonArea, visibleBoundarySegments } from "../geometry/polygon";
+import { distanceToSegment, lineSide, pointInPolygon, polygonArea, segmentIntersection, visibleBoundarySegments } from "../geometry/polygon";
 import { LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
 import { applyBladeHit, remainingRatio, ROUND_LIVES } from "./roundState";
@@ -65,6 +65,7 @@ export class Game {
   private dangerPulse: { point: Point; startedAt: number } | null = null;
   private dangerLine: { start: Point; end: Point; startedAt: number } | null = null;
   private invalidLine: { start: Point; end: Point; startedAt: number } | null = null;
+  private metalPulse: { point: Point; startedAt: number } | null = null;
   private readonly audio = new AudioManager();
   private lastBladePositions: Point[] = this.physics.map((blade) => blade.position);
   private freezeUntil = 0;
@@ -129,6 +130,7 @@ export class Game {
     this.cutEffect = null;
     this.dangerPulse = null;
     this.dangerLine = null;
+    this.metalPulse = null;
     this.freezeUntil = 0;
     this.inputLockedUntil = 0;
     this.shakeUntil = 0;
@@ -202,7 +204,19 @@ export class Game {
       ));
       if (this.preview.danger) {
         this.handleBladeHit(this.dangerBladePosition(this.preview.start, this.preview.end), this.preview.start, this.preview.end);
-      } else if (this.attemptCut(this.preview.start, this.preview.end, true)) {
+      } else {
+        const metalPoint = this.findMetalContact(this.preview.start, this.preview.end);
+        if (metalPoint) {
+          this.showMetalCut(metalPoint);
+          event.preventDefault();
+          return;
+        }
+      }
+      if (this.activePointerId === null) {
+        event.preventDefault();
+        return;
+      }
+      if (!this.preview.danger && this.attemptCut(this.preview.start, this.preview.end, true)) {
         this.clearGesture();
       }
       event.preventDefault();
@@ -250,10 +264,11 @@ export class Game {
       return false;
     }
 
-    if (this.level.metalEdges?.some((metal) => result.intersections.some(
-      (intersection) => distanceToSegment(intersection, metal.start, metal.end) <= 9,
-    ))) {
-      if (!silent) this.showMetalCut(start, end);
+    const metalPoint = result.intersections.find((intersection) => this.level.metalEdges?.some(
+      (metal) => distanceToSegment(intersection, metal.start, metal.end) <= 9,
+    ));
+    if (metalPoint) {
+      if (!silent) this.showMetalCut(metalPoint);
       return false;
     }
 
@@ -335,9 +350,11 @@ export class Game {
 
   private complete(): void {
     this.status = "completed";
-    this.audio.playComplete();
     this.callbacks.onLevelComplete?.(this.level.id);
-    window.setTimeout(() => this.elements.resultDialog.showModal(), 360);
+    window.setTimeout(() => {
+      this.elements.resultDialog.showModal();
+      this.audio.playComplete();
+    }, 360);
   }
 
   private get remainingAreaRatio(): number {
@@ -357,9 +374,12 @@ export class Game {
     this.audio.playInvalid();
   }
 
-  private showMetalCut(start: Point, end: Point): void {
-    this.invalidLine = { start: { ...start }, end: { ...end }, startedAt: performance.now() };
+  private showMetalCut(point: Point): void {
+    const now = performance.now();
+    this.metalPulse = { point: { ...point }, startedAt: now };
+    this.inputLockedUntil = now + 100;
     this.audio.playMetalBlock();
+    this.clearGesture();
   }
 
   private frame(time: number): void {
@@ -404,6 +424,7 @@ export class Game {
     this.drawCutEffect(ctx, time);
     this.drawPreview(ctx);
     this.drawInvalidCut(ctx, time);
+    this.drawMetalPulse(ctx, time);
     this.drawDanger(ctx, time);
     ctx.restore();
   }
@@ -561,6 +582,38 @@ export class Game {
     ctx.restore();
   }
 
+  private drawMetalPulse(ctx: CanvasRenderingContext2D, time: number): void {
+    if (!this.metalPulse) return;
+    const age = time - this.metalPulse.startedAt;
+    if (age > 220) {
+      this.metalPulse = null;
+      return;
+    }
+    const progress = age / 220;
+    const { x, y } = this.metalPulse.point;
+    ctx.save();
+    ctx.globalAlpha = 1 - progress;
+    ctx.translate(x, y);
+    ctx.strokeStyle = "#efc069";
+    ctx.fillStyle = "#fff5d1";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "#d78332";
+    ctx.shadowBlur = 7;
+    ctx.beginPath();
+    ctx.arc(0, 0, 3 + progress * 5, 0, Math.PI * 2);
+    ctx.fill();
+    for (let index = 0; index < 7; index += 1) {
+      const angle = -2.5 + index * 0.82;
+      const start = 5 + progress * 3;
+      const end = 11 + progress * 17;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * start, Math.sin(angle) * start);
+      ctx.lineTo(Math.cos(angle) * end, Math.sin(angle) * end);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   private drawCutEffect(ctx: CanvasRenderingContext2D, time: number): void {
     if (!this.cutEffect) return;
     const age = time - this.cutEffect.startedAt;
@@ -682,5 +735,14 @@ export class Game {
       this.level.blades[index].radius + 2,
     ));
     return hit?.position ?? this.physics[0].position;
+  }
+
+  private findMetalContact(start: Point, end: Point): Point | null {
+    if (!this.level.metalEdges) return null;
+    for (const metal of visibleBoundarySegments(this.polygon, this.level.metalEdges)) {
+      const point = segmentIntersection(start, end, metal.start, metal.end);
+      if (point) return point;
+    }
+    return null;
   }
 }

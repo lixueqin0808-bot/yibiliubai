@@ -239,6 +239,16 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   transform: rotate(-5deg);
 }
 
+.result-dialog[open] .stamp {
+  animation: stamp-land 360ms cubic-bezier(.18, .72, .25, 1.18) both;
+}
+
+@keyframes stamp-land {
+  0% { opacity: 0; transform: translateY(-34px) scale(1.5) rotate(-12deg); filter: blur(2px); }
+  62% { opacity: 1; transform: translateY(3px) scale(.91) rotate(-4deg); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotate(-5deg); filter: blur(0); }
+}
+
 .tutorial-dialog,
 .level-dialog { text-align: center; }
 
