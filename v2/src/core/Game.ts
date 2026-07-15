@@ -11,6 +11,7 @@ import dangerMarkUrl from "../assets/danger-mark.webp";
 import inkBladeFourUrl from "../assets/ink-blade-four.webp";
 import inkBladeFiveUrl from "../assets/ink-blade-five.webp";
 import inkIronEdgeUrl from "../assets/ink-iron-edge-strip.webp";
+import inkSlateBevelUrl from "../assets/ink-slate-bevel-strip.webp";
 import inkTextureUrl from "../assets/ink-slate-map-texture.webp";
 
 interface GameElements {
@@ -78,6 +79,7 @@ export class Game {
   private readonly inkBladeFourImage = loadImage(inkBladeFourUrl);
   private readonly inkBladeFiveImage = loadImage(inkBladeFiveUrl);
   private readonly inkIronEdgeImage = loadImage(inkIronEdgeUrl);
+  private readonly inkSlateBevelImage = loadImage(inkSlateBevelUrl);
   private readonly inkTextureImage = loadImage(inkTextureUrl);
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -421,6 +423,7 @@ export class Game {
       ctx.translate(Math.sin(time * 0.22) * strength, Math.cos(time * 0.31) * strength * 0.6);
     }
     this.drawPolygon(ctx);
+    this.drawNormalBevelSegments(ctx);
     this.drawMetalSegments(ctx);
     this.drawGuide(ctx, time);
     this.physics.forEach((blade, index) => this.drawBlade(ctx, time, blade.position, index));
@@ -524,18 +527,41 @@ export class Game {
     ctx.restore();
   }
 
+  private drawNormalBevelSegments(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    this.polygon.forEach((start, index) => {
+      const end = this.polygon[(index + 1) % this.polygon.length];
+      if (this.isLockedBoundary(start, end)) return;
+      this.drawInsetEdge(ctx, start, end, this.inkSlateBevelImage, "#5a5e5d", 0.88);
+    });
+    ctx.restore();
+  }
+
   private drawMetalSegments(ctx: CanvasRenderingContext2D): void {
     if (!this.level.metalEdges) return;
     ctx.save();
     visibleBoundarySegments(this.polygon, this.level.metalEdges).forEach((metal) => {
-      const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
+      this.drawInsetEdge(ctx, metal.start, metal.end, this.inkIronEdgeImage, "#4b4a45", 0.94);
+    });
+    ctx.restore();
+  }
+
+  private drawInsetEdge(
+    ctx: CanvasRenderingContext2D,
+    start: Point,
+    end: Point,
+    image: HTMLImageElement,
+    fallback: string,
+    alpha: number,
+  ): void {
+      const length = Math.hypot(end.x - start.x, end.y - start.y);
       if (length < 1) return;
-      const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
+      const angle = Math.atan2(end.y - start.y, end.x - start.x);
       const edgeThickness = 10;
       const endInset = edgeThickness;
       const midpoint = {
-        x: (metal.start.x + metal.end.x) / 2,
-        y: (metal.start.y + metal.end.y) / 2,
+        x: (start.x + end.x) / 2,
+        y: (start.y + end.y) / 2,
       };
       const positiveNormal = { x: -Math.sin(angle), y: Math.cos(angle) };
       const interiorSign = pointInPolygon({
@@ -544,12 +570,12 @@ export class Game {
       }, this.polygon) ? 1 : -1;
 
       ctx.save();
-      ctx.translate(metal.start.x, metal.start.y);
+      ctx.translate(start.x, start.y);
       ctx.rotate(angle);
       // In local space, y=0 is the original polygon edge (the long side).
       // Mirroring when necessary makes positive y always point into the retained map.
       ctx.scale(1, interiorSign);
-      ctx.globalAlpha = 0.92;
+      ctx.globalAlpha = alpha;
       ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
       ctx.shadowBlur = 2;
       ctx.beginPath();
@@ -560,23 +586,28 @@ export class Game {
       ctx.closePath();
       ctx.clip();
 
-      if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
-        const pattern = ctx.createPattern(this.inkIronEdgeImage, "repeat");
+      if (image.complete && image.naturalWidth > 0) {
+        const pattern = ctx.createPattern(image, "repeat");
         if (pattern) {
-          const scale = edgeThickness / this.inkIronEdgeImage.naturalHeight;
+          const scale = edgeThickness / image.naturalHeight;
           pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
           ctx.fillStyle = pattern;
           ctx.fillRect(0, 0, length, edgeThickness);
         } else {
-          ctx.drawImage(this.inkIronEdgeImage, 0, 0, length, edgeThickness);
+          ctx.drawImage(image, 0, 0, length, edgeThickness);
         }
       } else {
-        ctx.fillStyle = "#4b4a45";
+        ctx.fillStyle = fallback;
         ctx.fillRect(0, 0, length, edgeThickness);
       }
       ctx.restore();
-    });
-    ctx.restore();
+  }
+
+  private isLockedBoundary(start: Point, end: Point): boolean {
+    return this.level.metalEdges?.some((metal) => (
+      distanceToSegment(start, metal.start, metal.end) <= 0.75
+      && distanceToSegment(end, metal.start, metal.end) <= 0.75
+    )) ?? false;
   }
 
   private drawPreview(ctx: CanvasRenderingContext2D): void {
