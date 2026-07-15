@@ -7,8 +7,8 @@ describe("campaign progress", () => {
   });
 
   it("records completion once and unlocks the next level", () => {
-    const progress = recordLevelCompletion(defaultCampaignProgress(), 1, 5);
+    const progress = recordLevelCompletion(defaultCampaignProgress(), 1, 15);
     expect(progress).toEqual({ unlockedThrough: 2, completed: [1] });
-    expect(recordLevelCompletion(progress, 1, 5)).toEqual(progress);
+    expect(recordLevelCompletion(progress, 1, 15)).toEqual(progress);
   });
 });

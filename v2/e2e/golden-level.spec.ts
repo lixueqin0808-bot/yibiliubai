@@ -64,12 +64,12 @@ test("desktop keeps the portrait game centered without overflow", async ({ page 
 
 test("returning players choose a level instead of being sent to the latest unlock", async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("yibiliubai-v2-campaign", JSON.stringify({ unlockedThrough: 5, completed: [1, 2, 3, 4, 5] }));
+    localStorage.setItem("yibiliubai-v2-campaign", JSON.stringify({ unlockedThrough: 15, completed: Array.from({ length: 15 }, (_, index) => index + 1) }));
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.locator("#startGame").click();
   await expect(page.locator("#levelDialog")).toBeVisible();
-  await expect(page.locator(".level-tile:not(:disabled)")).toHaveCount(5);
+  await expect(page.locator(".level-tile:not(:disabled)")).toHaveCount(15);
   await expect(page.locator("#game")).toHaveAttribute("data-level", "1");
 });

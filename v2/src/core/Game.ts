@@ -10,8 +10,9 @@ import backgroundUrl from "../assets/xuan-paper-background.webp";
 import dangerMarkUrl from "../assets/danger-mark.webp";
 import inkBladeFourUrl from "../assets/ink-blade-four.webp";
 import inkBladeFiveUrl from "../assets/ink-blade-five.webp";
-import inkIronEdgeUrl from "../assets/ink-iron-edge.webp";
-import inkTextureUrl from "../assets/ink-map-texture.webp";
+import inkIronEdgeUrl from "../assets/ink-iron-edge-strip.webp";
+import inkIronCornerUrl from "../assets/ink-iron-corner-joint.webp";
+import inkTextureUrl from "../assets/ink-slate-map-texture.webp";
 
 interface GameElements {
   progressFill: HTMLElement;
@@ -77,7 +78,9 @@ export class Game {
   private readonly inkBladeFourImage = loadImage(inkBladeFourUrl);
   private readonly inkBladeFiveImage = loadImage(inkBladeFiveUrl);
   private readonly inkIronEdgeImage = loadImage(inkIronEdgeUrl);
+  private readonly inkIronCornerImage = loadImage(inkIronCornerUrl);
   private readonly inkTextureImage = loadImage(inkTextureUrl);
+  private ironEdgeTile: HTMLCanvasElement | null = null;
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(
@@ -434,21 +437,18 @@ export class Game {
     ctx.beginPath();
     this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
-    ctx.fillStyle = "#0b0b0a";
+    ctx.fillStyle = "#3f403d";
     ctx.shadowColor = "rgba(0, 0, 0, 0.62)";
     ctx.shadowBlur = 13;
     ctx.shadowOffsetY = 5;
     ctx.fill();
     ctx.shadowColor = "transparent";
     ctx.clip();
-    if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
-      ctx.globalAlpha = 0.78;
-      ctx.drawImage(this.inkTextureImage, 28, 172, 334, 548);
-    }
+    this.fillInkSurface(ctx, 0.93);
     const inkWash = ctx.createLinearGradient(0, 230, 0, 640);
     inkWash.addColorStop(0, "rgba(255, 255, 255, 0.055)");
     inkWash.addColorStop(0.42, "rgba(0, 0, 0, 0)");
-    inkWash.addColorStop(1, "rgba(0, 0, 0, 0.24)");
+    inkWash.addColorStop(1, "rgba(0, 0, 0, 0.16)");
     ctx.globalAlpha = 1;
     ctx.fillStyle = inkWash;
     ctx.fillRect(0, 180, LOGICAL_WIDTH, 500);
@@ -458,12 +458,33 @@ export class Game {
     ctx.beginPath();
     this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.92)";
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(16, 16, 15, 0.84)";
+    ctx.lineWidth = 4;
     ctx.stroke();
     ctx.strokeStyle = "rgba(187, 187, 175, 0.12)";
     ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Keeps the map material at a fixed world scale while polygons are cut into new shapes. */
+  private fillInkSurface(ctx: CanvasRenderingContext2D, alpha: number): void {
+    if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
+      const pattern = ctx.createPattern(this.inkTextureImage, "repeat");
+      if (pattern) {
+        pattern.setTransform(new DOMMatrix([0.26, 0, 0, 0.26, 22, 34]));
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        ctx.fillStyle = pattern;
+        ctx.fillRect(-80, 140, LOGICAL_WIDTH + 160, 560);
+        ctx.restore();
+        return;
+      }
+    }
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = "#454641";
+    ctx.fillRect(-80, 140, LOGICAL_WIDTH + 160, 560);
     ctx.restore();
   }
 
@@ -518,18 +539,37 @@ export class Game {
     if (!this.level.metalEdges) return;
     ctx.save();
     ctx.lineCap = "round";
+    const jointPoints = new Map<string, Point>();
     visibleBoundarySegments(this.polygon, this.level.metalEdges).forEach((metal) => {
       const length = Math.hypot(metal.end.x - metal.start.x, metal.end.y - metal.start.y);
       const angle = Math.atan2(metal.end.y - metal.start.y, metal.end.x - metal.start.x);
+      const midpoint = { x: (metal.start.x + metal.end.x) / 2, y: (metal.start.y + metal.end.y) / 2 };
+      const center = this.polygonCentroid(this.polygon);
+      const leftNormal = { x: -(metal.end.y - metal.start.y) / length, y: (metal.end.x - metal.start.x) / length };
+      const inward = (center.x - midpoint.x) * leftNormal.x + (center.y - midpoint.y) * leftNormal.y >= 0 ? 1 : -1;
+      const inset = 5 * inward;
       if (this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
         ctx.save();
         ctx.translate(metal.start.x, metal.start.y);
         ctx.rotate(angle);
+        ctx.translate(0, inset);
         ctx.globalAlpha = 0.92;
         ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
         ctx.shadowBlur = 3;
-        ctx.drawImage(this.inkIronEdgeImage, 0, -8, length, 16);
+        const pattern = this.getIronEdgePattern(ctx);
+        if (pattern) {
+          pattern.setTransform(new DOMMatrix([0.1, 0, 0, 0.1, 0, -5]));
+          ctx.beginPath();
+          ctx.rect(0, -5, length, 10);
+          ctx.clip();
+          ctx.fillStyle = pattern;
+          ctx.fillRect(0, -5, length, 10);
+        } else {
+          ctx.drawImage(this.inkIronEdgeImage, 0, 176, this.inkIronEdgeImage.naturalWidth, 98, 0, -5, length, 10);
+        }
         ctx.restore();
+        jointPoints.set(`${metal.start.x}:${metal.start.y}`, { x: metal.start.x + leftNormal.x * inset, y: metal.start.y + leftNormal.y * inset });
+        jointPoints.set(`${metal.end.x}:${metal.end.y}`, { x: metal.end.x + leftNormal.x * inset, y: metal.end.y + leftNormal.y * inset });
         return;
       }
       ctx.lineWidth = 12;
@@ -546,7 +586,29 @@ export class Game {
       ctx.lineWidth = 12;
       ctx.strokeStyle = "#353535";
     });
+    if (this.inkIronCornerImage.complete && this.inkIronCornerImage.naturalWidth > 0) {
+      for (const point of jointPoints.values()) {
+        const size = 13;
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.shadowColor = "rgba(0, 0, 0, 0.62)";
+        ctx.shadowBlur = 2;
+        ctx.drawImage(this.inkIronCornerImage, point.x - size / 2, point.y - size / 2, size, size);
+        ctx.restore();
+      }
+    }
     ctx.restore();
+  }
+
+  private getIronEdgePattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
+    if (!this.ironEdgeTile && this.inkIronEdgeImage.complete && this.inkIronEdgeImage.naturalWidth > 0) {
+      this.ironEdgeTile = document.createElement("canvas");
+      this.ironEdgeTile.width = this.inkIronEdgeImage.naturalWidth;
+      this.ironEdgeTile.height = 98;
+      const tileContext = this.ironEdgeTile.getContext("2d");
+      tileContext?.drawImage(this.inkIronEdgeImage, 0, 176, this.inkIronEdgeImage.naturalWidth, 98, 0, 0, this.inkIronEdgeImage.naturalWidth, 98);
+    }
+    return this.ironEdgeTile ? ctx.createPattern(this.ironEdgeTile, "repeat") : null;
   }
 
   private drawPreview(ctx: CanvasRenderingContext2D): void {
@@ -629,16 +691,13 @@ export class Game {
     ctx.rotate(this.cutEffect.rotation * Math.min(1, age / 220));
     ctx.translate(-center.x, -center.y);
     ctx.globalAlpha = fade * 0.76;
-    ctx.fillStyle = "#171716";
+    ctx.fillStyle = "#40413e";
     ctx.beginPath();
     this.cutEffect.removed.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.closePath();
     ctx.fill();
-    if (this.inkTextureImage.complete && this.inkTextureImage.naturalWidth > 0) {
-      ctx.clip();
-      ctx.globalAlpha = fade * 0.72;
-      ctx.drawImage(this.inkTextureImage, 28, 172, 334, 548);
-    }
+    ctx.clip();
+    this.fillInkSurface(ctx, 0.94);
     ctx.restore();
 
     if (age < 180) {

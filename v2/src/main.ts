@@ -27,7 +27,7 @@ const game = new Game(canvas, {
   onLevelComplete(levelId) {
     campaign = recordLevelCompletion(campaign, levelId, LEVELS.length);
     saveCampaignProgress(campaign);
-    resultLabel.textContent = levelId === LEVELS.length ? "五幅墨境已成" : `第 ${levelId} 幅已成`;
+    resultLabel.textContent = levelId === LEVELS.length ? "十五幅墨境已成" : `第 ${levelId} 幅已成`;
     renderLevelGrid();
   },
 });
