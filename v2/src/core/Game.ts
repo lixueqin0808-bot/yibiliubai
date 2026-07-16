@@ -2,6 +2,7 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
+import { buildMapSidewall, type MapSidewall, type SidewallCorner, type SidewallFace } from "../geometry/mapSidewall";
 import { distanceToSegment, lineSide, pointInPolygon, polygonArea, segmentIntersection, visibleBoundarySegments } from "../geometry/polygon";
 import { bladeCollisionRadius, LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
@@ -10,8 +11,8 @@ import backgroundUrl from "../assets/xuan-paper-background.webp";
 import dangerMarkUrl from "../assets/danger-mark.webp";
 import inkBladeFourUrl from "../assets/ink-blade-four.webp";
 import inkBladeFiveUrl from "../assets/ink-blade-five.webp";
-import inkIronEdgeUrl from "../assets/ink-iron-edge-strip.webp";
 import inkSlateBevelUrl from "../assets/ink-slate-bevel-strip.webp";
+import inkSilverSteelUrl from "../assets/ink-silver-steel-edge-strip.webp";
 import inkTextureUrl from "../assets/ink-slate-map-texture.webp";
 
 interface GameElements {
@@ -78,9 +79,10 @@ export class Game {
   private readonly dangerMarkImage = loadImage(dangerMarkUrl);
   private readonly inkBladeFourImage = loadImage(inkBladeFourUrl);
   private readonly inkBladeFiveImage = loadImage(inkBladeFiveUrl);
-  private readonly inkIronEdgeImage = loadImage(inkIronEdgeUrl);
   private readonly inkSlateBevelImage = loadImage(inkSlateBevelUrl);
+  private readonly inkSilverSteelImage = loadImage(inkSilverSteelUrl);
   private readonly inkTextureImage = loadImage(inkTextureUrl);
+  private readonly sidewallDepth = 13;
   private readonly reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   constructor(
@@ -284,8 +286,7 @@ export class Game {
     const kept = bladeSides[0] ? result.positive : result.negative;
     const removed = bladeSides[0] ? result.negative : result.positive;
     this.polygon = kept;
-    const metalObstacles = this.metalObstacles();
-    this.physics.forEach((blade) => blade.setBoundary(this.polygon, metalObstacles));
+    this.physics.forEach((blade) => blade.setBoundary(this.polygon));
     this.effectiveCuts += 1;
     const now = performance.now();
     const cutStart = result.intersections[0];
@@ -422,9 +423,10 @@ export class Game {
       const strength = Math.max(0, (this.shakeUntil - time) / 170) * 3.2;
       ctx.translate(Math.sin(time * 0.22) * strength, Math.cos(time * 0.31) * strength * 0.6);
     }
+    const sidewall = buildMapSidewall(this.polygon, this.sidewallDepth);
+    this.drawMapShadow(ctx, sidewall);
+    this.drawMapSidewalls(ctx, sidewall);
     this.drawPolygon(ctx);
-    this.drawNormalBevelSegments(ctx);
-    this.drawMetalSegments(ctx);
     this.drawGuide(ctx, time);
     this.physics.forEach((blade, index) => this.drawBlade(ctx, time, blade.position, index));
     this.drawCutEffect(ctx, time);
@@ -437,21 +439,15 @@ export class Game {
 
   private drawPolygon(ctx: CanvasRenderingContext2D): void {
     ctx.save();
-    ctx.beginPath();
-    this.polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-    ctx.closePath();
+    this.tracePolygon(ctx, this.polygon);
     ctx.fillStyle = "#3f403d";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.62)";
-    ctx.shadowBlur = 13;
-    ctx.shadowOffsetY = 5;
     ctx.fill();
-    ctx.shadowColor = "transparent";
     ctx.clip();
     this.fillInkSurface(ctx, 0.93);
-    const inkWash = ctx.createLinearGradient(0, 230, 0, 640);
-    inkWash.addColorStop(0, "rgba(255, 255, 255, 0.055)");
-    inkWash.addColorStop(0.42, "rgba(0, 0, 0, 0)");
-    inkWash.addColorStop(1, "rgba(0, 0, 0, 0.16)");
+    const inkWash = ctx.createLinearGradient(210, 210, 790, 680);
+    inkWash.addColorStop(0, "rgba(245, 248, 246, 0.11)");
+    inkWash.addColorStop(0.46, "rgba(255, 255, 255, 0)");
+    inkWash.addColorStop(1, "rgba(0, 0, 0, 0.15)");
     ctx.globalAlpha = 1;
     ctx.fillStyle = inkWash;
     ctx.fillRect(0, 180, LOGICAL_WIDTH, 500);
@@ -527,80 +523,105 @@ export class Game {
     ctx.restore();
   }
 
-  private drawNormalBevelSegments(ctx: CanvasRenderingContext2D): void {
+  private drawMapShadow(ctx: CanvasRenderingContext2D, sidewall: MapSidewall): void {
     ctx.save();
-    this.polygon.forEach((start, index) => {
-      const end = this.polygon[(index + 1) % this.polygon.length];
-      if (this.isLockedBoundary(start, end)) return;
-      this.drawInsetEdge(ctx, start, end, this.inkSlateBevelImage, "#5a5e5d", 0.88);
-    });
+    ctx.translate(12, 16);
+    this.tracePolygon(ctx, sidewall.outerPolygon);
+    ctx.fillStyle = "rgba(18, 23, 25, 0.3)";
+    ctx.shadowColor = "rgba(10, 14, 16, 0.32)";
+    ctx.shadowBlur = 12;
+    ctx.fill();
     ctx.restore();
   }
 
-  private drawMetalSegments(ctx: CanvasRenderingContext2D): void {
-    if (!this.level.metalEdges) return;
-    ctx.save();
-    visibleBoundarySegments(this.polygon, this.level.metalEdges).forEach((metal) => {
-      this.drawInsetEdge(ctx, metal.start, metal.end, this.inkIronEdgeImage, "#4b4a45", 0.94);
+  private drawMapSidewalls(ctx: CanvasRenderingContext2D, sidewall: MapSidewall): void {
+    sidewall.faces.forEach((face) => this.drawSidewallFace(ctx, face, this.isLockedBoundary(face.innerStart, face.innerEnd)));
+    sidewall.corners.forEach((corner, index) => {
+      const previous = sidewall.faces[(index + sidewall.faces.length - 1) % sidewall.faces.length];
+      const next = sidewall.faces[index];
+      const isMetal = this.isLockedBoundary(previous.innerStart, previous.innerEnd)
+        || this.isLockedBoundary(next.innerStart, next.innerEnd);
+      this.drawSidewallCorner(ctx, corner, isMetal);
     });
-    ctx.restore();
   }
 
-  private drawInsetEdge(
-    ctx: CanvasRenderingContext2D,
-    start: Point,
-    end: Point,
-    image: HTMLImageElement,
-    fallback: string,
-    alpha: number,
-  ): void {
-      const length = Math.hypot(end.x - start.x, end.y - start.y);
-      if (length < 1) return;
-      const angle = Math.atan2(end.y - start.y, end.x - start.x);
-      const edgeThickness = 10;
-      const endInset = edgeThickness;
-      const midpoint = {
-        x: (start.x + end.x) / 2,
-        y: (start.y + end.y) / 2,
-      };
-      const positiveNormal = { x: -Math.sin(angle), y: Math.cos(angle) };
-      const interiorSign = pointInPolygon({
-        x: midpoint.x + positiveNormal.x * 2,
-        y: midpoint.y + positiveNormal.y * 2,
-      }, this.polygon) ? 1 : -1;
+  private drawSidewallFace(ctx: CanvasRenderingContext2D, face: SidewallFace, isMetal: boolean): void {
+    const delta = { x: face.innerEnd.x - face.innerStart.x, y: face.innerEnd.y - face.innerStart.y };
+    const length = Math.hypot(delta.x, delta.y);
+    if (length < 1) return;
+    const tangent = { x: delta.x / length, y: delta.y / length };
+    const leftNormal = { x: -tangent.y, y: tangent.x };
+    const outwardSign = leftNormal.x * face.outwardNormal.x + leftNormal.y * face.outwardNormal.y >= 0 ? 1 : -1;
+    const local = (point: Point) => ({
+      x: (point.x - face.innerStart.x) * tangent.x + (point.y - face.innerStart.y) * tangent.y,
+      y: ((point.x - face.innerStart.x) * leftNormal.x + (point.y - face.innerStart.y) * leftNormal.y) * outwardSign,
+    });
+    const outerEnd = local(face.outerEnd);
+    const outerStart = local(face.outerStart);
+    const depth = Math.max(outerEnd.y, outerStart.y, 1);
+    const light = Math.max(0, Math.min(1, (face.outwardNormal.x * -0.66 + face.outwardNormal.y * -0.75 + 1) / 2));
+    const image = isMetal ? this.inkSilverSteelImage : this.inkSlateBevelImage;
 
-      ctx.save();
-      ctx.translate(start.x, start.y);
-      ctx.rotate(angle);
-      // In local space, y=0 is the original polygon edge (the long side).
-      // Mirroring when necessary makes positive y always point into the retained map.
-      ctx.scale(1, interiorSign);
-      ctx.globalAlpha = alpha;
-      ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
-      ctx.shadowBlur = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(length, 0);
-      ctx.lineTo(length - endInset, edgeThickness);
-      ctx.lineTo(endInset, edgeThickness);
-      ctx.closePath();
-      ctx.clip();
+    ctx.save();
+    ctx.translate(face.innerStart.x, face.innerStart.y);
+    ctx.rotate(Math.atan2(delta.y, delta.x));
+    ctx.scale(1, outwardSign);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(length, 0);
+    ctx.lineTo(outerEnd.x, outerEnd.y);
+    ctx.lineTo(outerStart.x, outerStart.y);
+    ctx.closePath();
+    ctx.clip();
 
-      if (image.complete && image.naturalWidth > 0) {
-        const pattern = ctx.createPattern(image, "repeat");
-        if (pattern) {
-          const scale = edgeThickness / image.naturalHeight;
-          pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
-          ctx.fillStyle = pattern;
-          ctx.fillRect(0, 0, length, edgeThickness);
-        } else {
-          ctx.drawImage(image, 0, 0, length, edgeThickness);
-        }
+    if (image.complete && image.naturalWidth > 0) {
+      const pattern = ctx.createPattern(image, "repeat");
+      if (pattern) {
+        const scale = depth / image.naturalHeight;
+        pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
+        ctx.fillStyle = pattern;
       } else {
-        ctx.fillStyle = fallback;
-        ctx.fillRect(0, 0, length, edgeThickness);
+        ctx.drawImage(image, -this.sidewallDepth, 0, length + this.sidewallDepth * 2, depth + 1);
       }
-      ctx.restore();
+    } else {
+      ctx.fillStyle = isMetal ? "#9aa6ad" : "#555b5c";
+    }
+    ctx.fillRect(-this.sidewallDepth, 0, length + this.sidewallDepth * 2, depth + 1);
+
+    const shade = light - 0.5;
+    ctx.fillStyle = shade >= 0
+      ? `rgba(255, 255, 255, ${0.08 + shade * (isMetal ? 0.2 : 0.14)})`
+      : `rgba(0, 0, 0, ${0.08 + -shade * (isMetal ? 0.16 : 0.26)})`;
+    ctx.fillRect(-this.sidewallDepth, 0, length + this.sidewallDepth * 2, depth + 1);
+    ctx.strokeStyle = isMetal ? "rgba(10, 18, 23, 0.78)" : "rgba(22, 27, 28, 0.68)";
+    ctx.lineWidth = 0.85;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawSidewallCorner(ctx: CanvasRenderingContext2D, corner: SidewallCorner, isMetal: boolean): void {
+    const light = Math.max(0, Math.min(1, (corner.outwardNormal.x * -0.66 + corner.outwardNormal.y * -0.75 + 1) / 2));
+    const base = isMetal ? { red: 126, green: 142, blue: 151 } : { red: 77, green: 83, blue: 84 };
+    const lift = Math.round((light - 0.5) * (isMetal ? 68 : 38));
+    const color = `rgb(${base.red + lift}, ${base.green + lift}, ${base.blue + lift})`;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(corner.inner.x, corner.inner.y);
+    ctx.lineTo(corner.outerFromPrevious.x, corner.outerFromPrevious.y);
+    ctx.lineTo(corner.outerToNext.x, corner.outerToNext.y);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = isMetal ? "rgba(10, 18, 23, 0.76)" : "rgba(22, 27, 28, 0.62)";
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private tracePolygon(ctx: CanvasRenderingContext2D, polygon: Polygon): void {
+    ctx.beginPath();
+    polygon.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+    ctx.closePath();
   }
 
   private isLockedBoundary(start: Point, end: Point): boolean {
@@ -775,37 +796,6 @@ export class Game {
     return { x: total.x / polygon.length, y: total.y / polygon.length };
   }
 
-  /** The rendered metal strip is also a solid inset obstacle for blade physics. */
-  private metalObstacles(): Polygon[] {
-    if (!this.level.metalEdges) return [];
-    const edgeThickness = 10;
-    return visibleBoundarySegments(this.polygon, this.level.metalEdges).map((metal) => {
-      const delta = { x: metal.end.x - metal.start.x, y: metal.end.y - metal.start.y };
-      const length = Math.hypot(delta.x, delta.y);
-      if (length < 1) return [metal.start, metal.end, metal.end, metal.start];
-      const direction = { x: delta.x / length, y: delta.y / length };
-      const positiveNormal = { x: -direction.y, y: direction.x };
-      const midpoint = { x: (metal.start.x + metal.end.x) / 2, y: (metal.start.y + metal.end.y) / 2 };
-      const interiorSign = pointInPolygon({
-        x: midpoint.x + positiveNormal.x * 2,
-        y: midpoint.y + positiveNormal.y * 2,
-      }, this.polygon) ? 1 : -1;
-      const inward = { x: positiveNormal.x * interiorSign, y: positiveNormal.y * interiorSign };
-      return [
-        metal.start,
-        metal.end,
-        {
-          x: metal.end.x - direction.x * edgeThickness + inward.x * edgeThickness,
-          y: metal.end.y - direction.y * edgeThickness + inward.y * edgeThickness,
-        },
-        {
-          x: metal.start.x + direction.x * edgeThickness + inward.x * edgeThickness,
-          y: metal.start.y + direction.y * edgeThickness + inward.y * edgeThickness,
-        },
-      ];
-    });
-  }
-
   private createPhysics(level: LevelDefinition): PhysicsWorld[] {
     return level.blades.map((blade) => new PhysicsWorld(
       this.polygon,
@@ -813,7 +803,6 @@ export class Game {
       bladeCollisionRadius(blade),
       blade.velocity,
       blade.speed,
-      this.metalObstacles(),
     ));
   }
 

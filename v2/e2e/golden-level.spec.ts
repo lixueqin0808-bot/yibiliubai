@@ -91,7 +91,7 @@ test("locked edges render from the edge strip without a separate corner sprite",
   expect(loadedCornerSprite).toBe(false);
   const loadedEdgeStrip = await page.evaluate(() => performance
     .getEntriesByType("resource")
-    .some((entry) => entry.name.includes("ink-iron-edge-strip")));
+    .some((entry) => entry.name.includes("ink-silver-steel-edge-strip")));
   expect(loadedEdgeStrip).toBe(true);
   const loadedBevelStrip = await page.evaluate(() => performance
     .getEntriesByType("resource")
@@ -99,4 +99,26 @@ test("locked edges render from the edge strip without a separate corner sprite",
   expect(loadedBevelStrip).toBe(true);
 
   await page.screenshot({ path: "test-results/locked-edge-level.png", fullPage: true });
+});
+
+test("all fifteen maps render with closed finite sidewall corners", async ({ page }) => {
+  test.setTimeout(40_000);
+  await page.addInitScript(() => {
+    localStorage.setItem("yibiliubai-v2-campaign", JSON.stringify({ unlockedThrough: 15, completed: [] }));
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.locator("#startGame").click();
+
+  for (let level = 1; level <= 15; level += 1) {
+    await page.getByRole("button", { name: `进入第 ${level} 关` }).click();
+    await expect(page.locator("#game")).toHaveAttribute("data-level", String(level));
+    await page.waitForTimeout(100);
+    await page.screenshot({ path: `test-results/map-${level}.png`, fullPage: true });
+    if (level < 15) {
+      await page.locator("#settings").click();
+      await page.locator("#openLevels").click();
+      await expect(page.locator("#levelDialog")).toBeVisible();
+    }
+  }
 });
