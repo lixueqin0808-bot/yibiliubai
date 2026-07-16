@@ -2,7 +2,7 @@ import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
-import { buildMapSidewall, type MapSidewall, type SidewallCorner, type SidewallFace } from "../geometry/mapSidewall";
+import { buildMapSidewall, type MapSidewall, type SidewallFace } from "../geometry/mapSidewall";
 import { distanceToSegment, lineSide, pointInPolygon, polygonArea, segmentIntersection, visibleBoundarySegments } from "../geometry/polygon";
 import { bladeCollisionRadius, LEVELS, LOGICAL_HEIGHT, LOGICAL_WIDTH, type LevelDefinition } from "../levels/goldenLevel";
 import { PhysicsWorld } from "../physics/PhysicsWorld";
@@ -536,13 +536,6 @@ export class Game {
 
   private drawMapSidewalls(ctx: CanvasRenderingContext2D, sidewall: MapSidewall): void {
     sidewall.faces.forEach((face) => this.drawSidewallFace(ctx, face, this.isLockedBoundary(face.innerStart, face.innerEnd)));
-    sidewall.corners.forEach((corner, index) => {
-      const previous = sidewall.faces[(index + sidewall.faces.length - 1) % sidewall.faces.length];
-      const next = sidewall.faces[index];
-      const isMetal = this.isLockedBoundary(previous.innerStart, previous.innerEnd)
-        || this.isLockedBoundary(next.innerStart, next.innerEnd);
-      this.drawSidewallCorner(ctx, corner, isMetal);
-    });
   }
 
   private drawSidewallFace(ctx: CanvasRenderingContext2D, face: SidewallFace, isMetal: boolean): void {
@@ -595,25 +588,6 @@ export class Game {
     ctx.fillRect(-this.sidewallDepth, 0, length + this.sidewallDepth * 2, depth + 1);
     ctx.strokeStyle = isMetal ? "rgba(10, 18, 23, 0.78)" : "rgba(22, 27, 28, 0.68)";
     ctx.lineWidth = 0.85;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private drawSidewallCorner(ctx: CanvasRenderingContext2D, corner: SidewallCorner, isMetal: boolean): void {
-    const light = Math.max(0, Math.min(1, (corner.outwardNormal.x * -0.66 + corner.outwardNormal.y * -0.75 + 1) / 2));
-    const base = isMetal ? { red: 126, green: 142, blue: 151 } : { red: 77, green: 83, blue: 84 };
-    const lift = Math.round((light - 0.5) * (isMetal ? 68 : 38));
-    const color = `rgb(${base.red + lift}, ${base.green + lift}, ${base.blue + lift})`;
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(corner.inner.x, corner.inner.y);
-    ctx.lineTo(corner.outerFromPrevious.x, corner.outerFromPrevious.y);
-    ctx.lineTo(corner.outerToNext.x, corner.outerToNext.y);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = isMetal ? "rgba(10, 18, 23, 0.76)" : "rgba(22, 27, 28, 0.62)";
-    ctx.lineWidth = 0.8;
     ctx.stroke();
     ctx.restore();
   }

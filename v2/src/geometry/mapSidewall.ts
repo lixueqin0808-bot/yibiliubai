@@ -9,17 +9,9 @@ export interface SidewallFace {
   outwardNormal: Point;
 }
 
-export interface SidewallCorner {
-  inner: Point;
-  outerFromPrevious: Point;
-  outerToNext: Point;
-  outwardNormal: Point;
-}
-
 export interface MapSidewall {
   outerPolygon: Polygon;
   faces: SidewallFace[];
-  corners: SidewallCorner[];
 }
 
 function normalize(vector: Point): Point {
@@ -36,43 +28,60 @@ function outwardNormal(start: Point, end: Point, polygon: Polygon): Point {
     : left;
 }
 
-function move(point: Point, direction: Point, distance: number): Point {
+function lineIntersection(point: Point, direction: Point, otherPoint: Point, otherDirection: Point): Point | null {
+  const denominator = direction.x * otherDirection.y - direction.y * otherDirection.x;
+  if (Math.abs(denominator) < 0.00001) return null;
+  const offset = { x: otherPoint.x - point.x, y: otherPoint.y - point.y };
+  const distance = (offset.x * otherDirection.y - offset.y * otherDirection.x) / denominator;
   return { x: point.x + direction.x * distance, y: point.y + direction.y * distance };
 }
 
+function outerVertex(polygon: Polygon, index: number, depth: number): Point {
+  const previousIndex = (index + polygon.length - 1) % polygon.length;
+  const nextIndex = (index + 1) % polygon.length;
+  const previous = polygon[previousIndex];
+  const current = polygon[index];
+  const next = polygon[nextIndex];
+  const previousDirection = normalize({ x: current.x - previous.x, y: current.y - previous.y });
+  const nextDirection = normalize({ x: next.x - current.x, y: next.y - current.y });
+  const previousNormal = outwardNormal(previous, current, polygon);
+  const nextNormal = outwardNormal(current, next, polygon);
+  const intersection = lineIntersection(
+    { x: current.x + previousNormal.x * depth, y: current.y + previousNormal.y * depth },
+    previousDirection,
+    { x: current.x + nextNormal.x * depth, y: current.y + nextNormal.y * depth },
+    nextDirection,
+  );
+
+  const miterLimit = depth * 2.25;
+  if (intersection) {
+    const displacement = { x: intersection.x - current.x, y: intersection.y - current.y };
+    const distance = Math.hypot(displacement.x, displacement.y);
+    const facesBothSides = displacement.x * previousNormal.x + displacement.y * previousNormal.y > 0
+      && displacement.x * nextNormal.x + displacement.y * nextNormal.y > 0;
+    if (facesBothSides && distance <= miterLimit) return intersection;
+  }
+
+  const blended = normalize({ x: previousNormal.x + nextNormal.x, y: previousNormal.y + nextNormal.y });
+  return { x: current.x + blended.x * depth, y: current.y + blended.y * depth };
+}
+
 /**
- * Builds a finite trapezoid for every map edge. Its outer side is longer than
- * the top-face edge, while each vertex is closed by a short 45-degree cap.
- * This avoids unbounded miter spikes on sharp and concave map corners.
+ * Builds the visible lower sidewall outside a map top face. The original polygon
+ * stays untouched: it remains the short inner edge and the gameplay boundary.
  */
 export function buildMapSidewall(polygon: Polygon, depth: number): MapSidewall {
-  const cornerExtension = Math.min(depth * 0.48, 6.5);
+  const outerPolygon = polygon.map((_, index) => outerVertex(polygon, index, depth));
   const faces = polygon.map((innerStart, index) => {
-    const innerEnd = polygon[(index + 1) % polygon.length];
-    const tangent = normalize({ x: innerEnd.x - innerStart.x, y: innerEnd.y - innerStart.y });
-    const normal = outwardNormal(innerStart, innerEnd, polygon);
-    const outerStart = move(move(innerStart, normal, depth), tangent, -cornerExtension);
-    const outerEnd = move(move(innerEnd, normal, depth), tangent, cornerExtension);
-    return { innerStart, innerEnd, outerStart, outerEnd, outwardNormal: normal };
-  });
-
-  const corners = polygon.map((inner, index) => {
-    const previous = faces[(index + faces.length - 1) % faces.length];
-    const next = faces[index];
+    const nextIndex = (index + 1) % polygon.length;
+    const innerEnd = polygon[nextIndex];
     return {
-      inner,
-      outerFromPrevious: previous.outerEnd,
-      outerToNext: next.outerStart,
-      outwardNormal: normalize({
-        x: previous.outwardNormal.x + next.outwardNormal.x,
-        y: previous.outwardNormal.y + next.outwardNormal.y,
-      }),
+      innerStart,
+      innerEnd,
+      outerStart: outerPolygon[index],
+      outerEnd: outerPolygon[nextIndex],
+      outwardNormal: outwardNormal(innerStart, innerEnd, polygon),
     };
   });
-
-  return {
-    faces,
-    corners,
-    outerPolygon: faces.flatMap((face) => [face.outerStart, face.outerEnd]),
-  };
+  return { outerPolygon, faces };
 }

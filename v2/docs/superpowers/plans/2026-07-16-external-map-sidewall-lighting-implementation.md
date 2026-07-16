@@ -40,13 +40,13 @@
 
 **Interfaces:**
 - Produces: `buildMapSidewall(polygon, depth): MapSidewall`。
-- `MapSidewall` 包含 `outerPolygon: Polygon`、按原边顺序排列的 `faces: SidewallFace[]` 与 `corners: SidewallCorner[]`。
-- `SidewallFace` 包含 `innerStart`, `innerEnd`, `outerEnd`, `outerStart`, `outwardNormal`；`SidewallCorner` 包含 `inner`, `outerFromPrevious`, `outerToNext`, `outwardNormal`。
+- `MapSidewall` 包含 `outerPolygon: Polygon` 与按原边顺序排列的 `faces: SidewallFace[]`。
+- `SidewallFace` 包含 `innerStart`, `innerEnd`, `outerEnd`, `outerStart`, `outwardNormal`。
 
 - [ ] 先写凸四边形测试：每条 `inner` 边保持原顶面边，外扩顶点都位于多边形外。
 - [ ] 写凹多边形测试：外扩顶点有限，不出现 NaN、无穷大或超过最大斜接长度的尖刺。
-- [ ] 实现逐边外法线、固定长度外扩梯形和短 45 度顶点连接面，不使用无限斜接算法。
-- [ ] 运行单测，确认侧壁连续、顶点不产生白缝或尖刺，并保持原多边形不变。
+- [ ] 实现逐边外法线、相邻外移直线交点和带上限的斜接算法。
+- [ ] 运行单测，确认侧壁连续并保持原多边形不变。
 
 ### Task 3: 用外扩侧壁重写地图渲染
 

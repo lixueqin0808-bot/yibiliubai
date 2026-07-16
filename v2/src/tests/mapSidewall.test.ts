@@ -20,7 +20,7 @@ describe("buildMapSidewall", () => {
     });
   });
 
-  it("uses finite 45-degree corner caps for sharp and concave joins", () => {
+  it("limits sharp and concave joins to finite outer vertices", () => {
     const polygon = [
       { x: 30, y: 20 },
       { x: 190, y: 20 },
@@ -31,19 +31,10 @@ describe("buildMapSidewall", () => {
     ];
     const sidewall = buildMapSidewall(polygon, 12);
 
-    expect(sidewall.corners).toHaveLength(polygon.length);
-    sidewall.outerPolygon.forEach((point) => {
+    sidewall.outerPolygon.forEach((point, index) => {
       expect(Number.isFinite(point.x)).toBe(true);
       expect(Number.isFinite(point.y)).toBe(true);
-    });
-    sidewall.faces.forEach((face) => {
-      const innerLength = Math.hypot(face.innerEnd.x - face.innerStart.x, face.innerEnd.y - face.innerStart.y);
-      const outerLength = Math.hypot(face.outerEnd.x - face.outerStart.x, face.outerEnd.y - face.outerStart.y);
-      expect(outerLength).toBeGreaterThan(innerLength);
-    });
-    sidewall.corners.forEach((corner) => {
-      expect(Math.hypot(corner.outerFromPrevious.x - corner.inner.x, corner.outerFromPrevious.y - corner.inner.y)).toBeLessThanOrEqual(20);
-      expect(Math.hypot(corner.outerToNext.x - corner.inner.x, corner.outerToNext.y - corner.inner.y)).toBeLessThanOrEqual(20);
+      expect(Math.hypot(point.x - polygon[index].x, point.y - polygon[index].y)).toBeLessThanOrEqual(27.1);
     });
   });
 });
