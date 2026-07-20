@@ -7,6 +7,7 @@ import levelCompleteUrl from "../assets/audio/level-complete.wav";
 import lifeLostUrl from "../assets/audio/life-lost.wav";
 import metalBlockUrl from "../assets/audio/metal-block.wav";
 import uiTapUrl from "../assets/audio/ui-tap.wav";
+import type { ResultRank } from "../results/resultScoring";
 
 type SampleName = "start" | "success" | "paper" | "dispersal" | "metal" | "blade" | "life" | "complete" | "tap";
 
@@ -82,8 +83,12 @@ export class AudioManager {
     this.tone(270, 230, 0.06, 0.018, "triangle");
   }
 
-  playComplete(): void {
+  playStamp(): void {
     this.sample("complete", { volume: 0.4, duration: 1.2, rate: 1 });
+  }
+
+  playResultVoice(_rank: ResultRank): void {
+    // The approved same-persona voice pack is intentionally an optional future asset.
   }
 
   playTap(): void {

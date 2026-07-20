@@ -2,14 +2,18 @@ import type { Point, Polygon } from "../core/types";
 
 const EPSILON = 1e-7;
 
-export function polygonArea(polygon: Polygon): number {
+export function signedPolygonArea(polygon: Polygon): number {
   let sum = 0;
   for (let index = 0; index < polygon.length; index += 1) {
     const current = polygon[index];
     const next = polygon[(index + 1) % polygon.length];
     sum += current.x * next.y - next.x * current.y;
   }
-  return Math.abs(sum) / 2;
+  return sum / 2;
+}
+
+export function polygonArea(polygon: Polygon): number {
+  return Math.abs(signedPolygonArea(polygon));
 }
 
 export function lineSide(start: Point, end: Point, point: Point): number {
@@ -39,6 +43,24 @@ export function segmentIntersection(a: Point, b: Point, c: Point, d: Point): Poi
   const u = (offset.x * r.y - offset.y * r.x) / denominator;
   if (t < -EPSILON || t > 1 + EPSILON || u < -EPSILON || u > 1 + EPSILON) return null;
   return { x: a.x + t * r.x, y: a.y + t * r.y };
+}
+
+/** Returns whether non-adjacent edges of a closed polygon never cross. */
+export function isSimplePolygon(polygon: Polygon): boolean {
+  if (polygon.length < 3) return false;
+  for (let first = 0; first < polygon.length; first += 1) {
+    const firstNext = (first + 1) % polygon.length;
+    for (let second = first + 1; second < polygon.length; second += 1) {
+      const secondNext = (second + 1) % polygon.length;
+      const sharesEndpoint = first === second
+        || firstNext === second
+        || secondNext === first
+        || first === 0 && secondNext === 0;
+      if (sharesEndpoint) continue;
+      if (segmentIntersection(polygon[first], polygon[firstNext], polygon[second], polygon[secondNext])) return false;
+    }
+  }
+  return true;
 }
 
 export function distanceToSegment(point: Point, start: Point, end: Point): number {

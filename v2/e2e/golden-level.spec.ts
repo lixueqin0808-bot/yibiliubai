@@ -7,6 +7,7 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.screenshot({ path: "test-results/start-screen.png", fullPage: true });
   await page.locator("#startGame").click();
   await expect(page.locator("#startScreen")).toBeHidden();
+  await expect(page.locator("#levelIndicator")).toHaveText("第 01 关");
   await expect.poll(() => page.locator(".target-knot").evaluate((element) => (element as HTMLElement).style.left)).toBe("48%");
   await expect(page.locator(".life-dot")).toHaveCount(3);
   await expect(page.locator("#settingsMenu")).toBeHidden();
@@ -39,10 +40,11 @@ test("mobile canvas renders and accepts the first cut", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(382, 440, { steps: 12 });
   await page.mouse.up();
-  await expect(page.locator("#resultDialog")).toBeVisible();
-  await expect(page.locator("#nextLevel")).toBeVisible();
+  await expect(page.locator("#resultDialog")).toBeVisible({ timeout: 2_500 });
+  await expect(page.locator("#nextLevel")).toBeEnabled({ timeout: 2_500 });
   await page.locator("#nextLevel").click();
   await expect(page.locator("#game")).toHaveAttribute("data-level", "2");
+  await expect(page.locator("#levelIndicator")).toHaveText("第 02 关");
   await page.screenshot({ path: "test-results/golden-result.png", fullPage: true });
 });
 
@@ -101,6 +103,43 @@ test("locked edges render from the edge strip without a separate corner sprite",
   await page.screenshot({ path: "test-results/locked-edge-level.png", fullPage: true });
 });
 
+test("all fifteen levels expose the final map silhouettes", async ({ page }) => {
+  const expectedShapes = new Map([
+    [1, "rounded-slab"],
+    [2, "tapered-tablet"],
+    [3, "triangle"],
+    [4, "shield"],
+    [5, "hex-jade"],
+    [6, "kite"],
+    [7, "star-disc"],
+    [8, "teardrop"],
+    [9, "leaf"],
+    [10, "mountain"],
+    [11, "wide-h"],
+    [12, "heart"],
+    [13, "vertical-slip"],
+    [14, "lantern"],
+    [15, "bagua"],
+  ]);
+  await page.addInitScript(() => {
+    localStorage.setItem("yibiliubai-v2-campaign", JSON.stringify({ unlockedThrough: 15, completed: [] }));
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.locator("#startGame").click();
+
+  for (const [level, shape] of expectedShapes) {
+    await page.locator(".level-tile").nth(level - 1).click();
+    await expect(page.locator("#game")).toHaveAttribute("data-level", String(level));
+    await expect(page.locator("#game")).toHaveAttribute("data-shape", shape);
+    if (level !== 15) {
+      await page.locator("#settings").click();
+      await page.locator("#openLevels").click();
+      await expect(page.locator("#levelDialog")).toBeVisible();
+    }
+  }
+});
+
 test("all fifteen maps render with closed finite sidewall corners", async ({ page }) => {
   test.setTimeout(40_000);
   await page.addInitScript(() => {
@@ -121,4 +160,84 @@ test("all fifteen maps render with closed finite sidewall corners", async ({ pag
       await expect(page.locator("#levelDialog")).toBeVisible();
     }
   }
+});
+
+const resultCases = [
+  ["hangbao", "夯爆了", { elapsedMs: 1_000, lives: 3, cuts: 8 }],
+  ["top", "顶尖", { elapsedMs: 1_000, lives: 2, cuts: 8 }],
+  ["ren-shang-ren", "人上人", { elapsedMs: 1_000, lives: 1, cuts: 8 }],
+  ["npc", "NPC", { elapsedMs: 37_000, lives: 3, cuts: 8 }],
+  ["la-wan-le", "拉完了", { elapsedMs: 55_000, lives: 3, cuts: 8 }],
+] as const;
+
+test.describe("result scoring flow", () => {
+  for (const [rank, label, input] of resultCases) {
+    test(`shows ${rank} with a locked-then-enabled result flow`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/?result-test=1");
+      await page.locator("#startGame").click();
+      await page.evaluate((value) => {
+        const testWindow = window as typeof window & {
+          __YIBILIUBAI_TEST__: { complete(input: typeof value): void };
+        };
+        testWindow.__YIBILIUBAI_TEST__.complete(value);
+      }, input);
+      const dialog = page.locator("#resultDialog");
+      await expect(dialog).toBeHidden();
+      await page.waitForTimeout(540);
+      await expect(dialog).toBeVisible();
+      await expect(page.locator("#nextLevel")).toBeDisabled();
+      await page.waitForTimeout(950);
+      await expect(dialog).toHaveAttribute("data-rank", rank);
+      await expect(page.locator("#resultRank")).toHaveText(label);
+      await expect(page.locator("#resultTime")).toHaveText(`${(input.elapsedMs / 1_000).toFixed(1)} 秒`);
+      await expect(page.locator("#nextLevel")).toBeEnabled();
+      if (rank === "hangbao") await page.screenshot({ path: "test-results/result-hangbao.png", fullPage: true });
+    });
+  }
+
+  test("first dialog tap skips the animation without advancing the level", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/?result-test=1");
+    await page.locator("#startGame").click();
+    await page.evaluate(() => {
+      (window as typeof window & { __YIBILIUBAI_TEST__: { complete(input: { elapsedMs: number; lives: 1 | 2 | 3; cuts: number }): void } })
+        .__YIBILIUBAI_TEST__.complete({ elapsedMs: 1_000, lives: 3, cuts: 3 });
+    });
+    await page.waitForTimeout(560);
+    await page.locator("#resultDialog").click({ position: { x: 12, y: 12 } });
+    await expect(page.locator("#nextLevel")).toBeEnabled();
+    await expect(page.locator("#game")).toHaveAttribute("data-level", "1");
+  });
+
+  test("persists the faster best time after reload", async ({ page }) => {
+    await page.goto("/?result-test=1");
+    await page.locator("#startGame").click();
+    const complete = (input: { elapsedMs: number; lives: 1 | 2 | 3; cuts: number }) => page.evaluate((value) => {
+      (window as typeof window & { __YIBILIUBAI_TEST__: { complete(next: typeof value): void } })
+        .__YIBILIUBAI_TEST__.complete(value);
+    }, input);
+    await complete({ elapsedMs: 20_000, lives: 3, cuts: 5 });
+    await page.waitForTimeout(1_500);
+    await page.locator("#again").click();
+    await complete({ elapsedMs: 10_000, lives: 3, cuts: 5 });
+    await page.waitForTimeout(1_500);
+    await page.reload();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("yibiliubai-v2-campaign") ?? "{}"));
+    expect(saved.bestTimes["1"]).toBe(10_000);
+  });
+
+  test("sound-off and reduced-motion modes still complete the result flow", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/?result-test=1");
+    await page.locator("#startGame").click();
+    await page.locator("#settings").click();
+    await page.locator("#sound").click();
+    await page.evaluate(() => {
+      (window as typeof window & { __YIBILIUBAI_TEST__: { complete(input: { elapsedMs: number; lives: 1 | 2 | 3; cuts: number }): void } })
+        .__YIBILIUBAI_TEST__.complete({ elapsedMs: 1_000, lives: 3, cuts: 3 });
+    });
+    await expect(page.locator("#resultDialog")).toBeVisible({ timeout: 2_500 });
+    await expect(page.locator("#nextLevel")).toBeEnabled({ timeout: 2_500 });
+  });
 });

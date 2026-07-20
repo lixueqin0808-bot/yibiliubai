@@ -1,5 +1,7 @@
 import type { CutPreview, GameStatus, Point, Polygon } from "./types";
 import { AudioManager } from "../audio/AudioManager";
+import { LevelTimer } from "../results/LevelTimer";
+import { calculateLevelResult, type LevelResult } from "../results/resultScoring";
 import { segmentHitsCircle, sweptCircleHitsSegment } from "../geometry/collision";
 import { splitPolygon } from "../geometry/cut";
 import { buildMapSidewall, type MapSidewall, type SidewallFace } from "../geometry/mapSidewall";
@@ -19,13 +21,14 @@ interface GameElements {
   progressFill: HTMLElement;
   targetKnot: HTMLElement;
   lifeLeaves: HTMLElement[];
+  levelIndicator: HTMLElement;
   pauseDialog: HTMLDialogElement;
   resultDialog: HTMLDialogElement;
 }
 
 interface GameCallbacks {
   onLevelStart?: (levelId: number) => void;
-  onLevelComplete?: (levelId: number) => void;
+  onLevelComplete?: (result: LevelResult) => void;
 }
 
 interface CutEffect {
@@ -70,6 +73,7 @@ export class Game {
   private invalidLine: { start: Point; end: Point; startedAt: number } | null = null;
   private metalPulse: { point: Point; startedAt: number } | null = null;
   private readonly audio = new AudioManager();
+  private readonly timer = new LevelTimer();
   private lastBladePositions: Point[] = this.physics.map((blade) => blade.position);
   private freezeUntil = 0;
   private inputLockedUntil = 0;
@@ -95,9 +99,16 @@ export class Game {
     this.context = context;
     this.elements = elements;
     this.canvas.dataset.level = String(this.level.id);
+    this.canvas.dataset.shape = this.level.shapeId ?? "legacy-slab";
+    this.updateHud();
     this.resizeCanvas();
     this.bindPointerEvents();
     window.addEventListener("resize", () => this.resizeCanvas());
+    document.addEventListener("visibilitychange", () => {
+      const now = performance.now();
+      if (document.hidden) this.timer.pause(now);
+      else if (this.status === "playing") this.timer.resume(now);
+    });
     requestAnimationFrame((time) => this.frame(time));
   }
 
@@ -126,6 +137,7 @@ export class Game {
     this.levelIndex = index;
     this.level = LEVELS[index];
     this.canvas.dataset.level = String(this.level.id);
+    this.canvas.dataset.shape = this.level.shapeId ?? "legacy-slab";
     this.polygon = structuredClone(this.level.polygon);
     this.initialArea = polygonArea(this.level.polygon);
     this.physics = this.createPhysics(this.level);
@@ -141,6 +153,7 @@ export class Game {
     this.shakeUntil = 0;
     this.effectiveCuts = 0;
     this.lives = ROUND_LIVES;
+    this.timer.reset();
     this.invalidLine = null;
     this.updateHud();
     this.callbacks.onLevelStart?.(this.level.id);
@@ -150,6 +163,7 @@ export class Game {
 
   pause(): void {
     if (this.status !== "playing") return;
+    this.timer.pause(performance.now());
     this.status = "paused";
     this.elements.pauseDialog.showModal();
   }
@@ -157,6 +171,7 @@ export class Game {
   resume(): void {
     if (this.status !== "paused") return;
     this.status = "playing";
+    this.timer.resume(performance.now());
     this.elements.pauseDialog.close();
   }
 
@@ -170,6 +185,26 @@ export class Game {
 
   playUiTap(): void {
     this.audio.playTap();
+  }
+
+  playResultVoice(rank: LevelResult["rank"]): void {
+    this.audio.playResultVoice(rank);
+  }
+
+  playStamp(): void {
+    this.audio.playStamp();
+  }
+
+  completeForTest(input: Pick<LevelResult, "elapsedMs" | "lives" | "cuts">): void {
+    this.status = "completed";
+    this.clearGesture();
+    this.callbacks.onLevelComplete?.(calculateLevelResult({
+      levelId: this.level.id,
+      elapsedMs: input.elapsedMs,
+      lives: input.lives,
+      cuts: input.cuts,
+      timing: this.level.timing,
+    }));
   }
 
   private resizeCanvas(): void {
@@ -194,6 +229,7 @@ export class Game {
       this.activePointerId = event.pointerId;
       this.canvas.setPointerCapture(event.pointerId);
       this.preview = { start: point, end: point, danger: false };
+      this.timer.start(performance.now());
       this.audio.playStart();
       event.preventDefault();
     });
@@ -355,11 +391,14 @@ export class Game {
 
   private complete(): void {
     this.status = "completed";
-    this.callbacks.onLevelComplete?.(this.level.id);
-    window.setTimeout(() => {
-      this.elements.resultDialog.showModal();
-      window.setTimeout(() => this.audio.playComplete(), 340);
-    }, 360);
+    this.clearGesture();
+    this.callbacks.onLevelComplete?.(calculateLevelResult({
+      levelId: this.level.id,
+      elapsedMs: this.timer.elapsed(performance.now()),
+      lives: this.lives as 1 | 2 | 3,
+      cuts: this.effectiveCuts,
+      timing: this.level.timing,
+    }));
   }
 
   private get remainingAreaRatio(): number {
@@ -367,6 +406,7 @@ export class Game {
   }
 
   private updateHud(): void {
+    this.elements.levelIndicator.textContent = `第 ${String(this.level.id).padStart(2, "0")} 关`;
     const hiddenPercent = Math.max(0, 100 - this.remainingAreaRatio * 100);
     this.elements.progressFill.style.clipPath = `inset(0 ${hiddenPercent}% 0 0)`;
     this.elements.targetKnot.style.left = `${this.level.target * 100}%`;
@@ -444,6 +484,7 @@ export class Game {
     ctx.fill();
     ctx.clip();
     this.fillInkSurface(ctx, 0.93);
+    this.drawMapMotif(ctx);
     const inkWash = ctx.createLinearGradient(210, 210, 790, 680);
     inkWash.addColorStop(0, "rgba(245, 248, 246, 0.11)");
     inkWash.addColorStop(0.46, "rgba(255, 255, 255, 0)");
@@ -473,6 +514,87 @@ export class Game {
     ctx.globalAlpha *= alpha;
     ctx.fillStyle = "#454641";
     ctx.fillRect(-80, 140, LOGICAL_WIDTH + 160, 560);
+    ctx.restore();
+  }
+
+  private drawMapMotif(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.strokeStyle = "rgba(228, 231, 224, 0.15)";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 1.2;
+
+    if (this.level.shapeId === "leaf") {
+      ctx.beginPath();
+      ctx.moveTo(195, 604);
+      ctx.quadraticCurveTo(189, 432, 195, 262);
+      ctx.stroke();
+      [
+        [194, 520, 120, 480], [193, 448, 84, 404],
+        [196, 520, 270, 480], [197, 448, 306, 404],
+      ].forEach(([startX, startY, endX, endY]) => {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.quadraticCurveTo((startX + endX) / 2, endY + 12, endX, endY);
+        ctx.stroke();
+      });
+    } else if (this.level.shapeId === "star-disc") {
+      ctx.beginPath();
+      for (let index = 0; index < 10; index += 1) {
+        const angle = -Math.PI / 2 + index * Math.PI / 5;
+        const radius = index % 2 === 0 ? 72 : 31;
+        const x = 195 + Math.cos(angle) * radius;
+        const y = 434 + Math.sin(angle) * radius;
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    } else if (this.level.shapeId === "hex-jade") {
+      ctx.beginPath();
+      [[145, 292], [246, 292], [282, 386], [247, 566], [143, 566], [108, 386]].forEach(([x, y], index) => {
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    } else if (this.level.shapeId === "vertical-slip") {
+      [350, 520].forEach((y) => {
+        ctx.beginPath();
+        ctx.moveTo(118, y);
+        ctx.lineTo(278, y);
+        ctx.stroke();
+      });
+    } else if (this.level.shapeId === "lantern") {
+      [-62, -31, 0, 31, 62].forEach((offset) => {
+        ctx.beginPath();
+        ctx.moveTo(195 + offset * 0.72, 272);
+        ctx.quadraticCurveTo(195 + offset * 1.22, 430, 195 + offset * 0.72, 588);
+        ctx.stroke();
+      });
+      [278, 584].forEach((y) => {
+        ctx.beginPath();
+        ctx.moveTo(128, y);
+        ctx.lineTo(262, y);
+        ctx.stroke();
+      });
+    } else if (this.level.shapeId === "bagua") {
+      for (let group = 0; group < 8; group += 1) {
+        const angle = group * Math.PI / 4;
+        ctx.save();
+        ctx.translate(195 + Math.cos(angle) * 112, 431 + Math.sin(angle) * 145);
+        ctx.rotate(angle + Math.PI / 2);
+        for (let line = -1; line <= 1; line += 1) {
+          const y = line * 7;
+          ctx.beginPath();
+          if ((group + line) % 2 === 0) {
+            ctx.moveTo(-18, y); ctx.lineTo(-3, y);
+            ctx.moveTo(3, y); ctx.lineTo(18, y);
+          } else {
+            ctx.moveTo(-18, y); ctx.lineTo(18, y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
     ctx.restore();
   }
 

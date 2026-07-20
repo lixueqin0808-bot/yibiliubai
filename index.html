@@ -2,97 +2,93 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <title>一笔留白 MVP</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#111110" />
+    <title>一笔留白 V2</title>
+    <script type="module" crossorigin src="./assets/index-CvoWpVD6.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BjXYjE4G.css">
   </head>
   <body>
-    <main class="app">
-      <section class="stage-shell" aria-label="一笔留白游戏区域">
-        <canvas id="game" width="1180" height="720"></canvas>
+    <main class="game-shell" aria-label="一笔留白游戏">
+      <canvas id="game" width="390" height="844" aria-label="水墨切割游戏画面"></canvas>
 
-        <div class="top-bar">
-          <div>
-            <p class="eyebrow">一笔留白</p>
-            <h1 id="levelTitle">初入画境</h1>
-          </div>
-          <div class="stats">
-            <div>
-              <span>留白</span>
-              <strong id="clearedText">0%</strong>
-            </div>
-            <div>
-              <span>目标</span>
-              <strong id="targetText">60%</strong>
-            </div>
-            <div>
-              <span>剩余笔画</span>
-              <strong id="strokeText">6</strong>
-            </div>
-          </div>
-        </div>
-
-        <div class="progress-wrap">
-          <div class="progress-track">
-            <div id="progressBar" class="progress-bar"></div>
-            <i id="targetMarker" class="target-marker"></i>
-          </div>
-        </div>
-
-        <div id="coachTip" class="coach-tip hidden" role="status"></div>
-        <div id="toast" class="toast" role="status"></div>
-
-        <aside id="tutorialPanel" class="tutorial-panel" aria-label="玩法说明">
-          <div class="tutorial-title">
-            <span>玩法说明</span>
-            <button id="tutorialClose" type="button" aria-label="关闭玩法说明">×</button>
-          </div>
-          <p class="tutorial-goal">目标：用笔锋切掉浓墨，让“留白”达到目标比例。</p>
-          <div class="legend-grid" aria-label="元素图例">
-            <div><i class="legend-ink"></i><span>浓墨：可切区域</span></div>
-            <div><i class="legend-spirit"></i><span>墨灵：不能碰</span></div>
-            <div><i class="legend-seal"></i><span>朱印：不能切</span></div>
-            <div><i class="legend-koi"></i><span>锦鲤：要保护</span></div>
-            <div><i class="legend-stroke"></i><span>笔锋：你的切线</span></div>
-          </div>
-          <ol>
-            <li>按住鼠标，从浓墨的一边拖到另一边再松开。</li>
-            <li>切割后，含有墨灵的一侧会保留。</li>
-            <li>没有墨灵的一侧会化成留白，进度条会上升。</li>
-            <li>如果切线碰到墨灵或朱印，会损失一笔。</li>
-            <li>后期关卡会出现锦鲤：切线不能碰到它，切完后也必须让它留在浓墨里。</li>
-            <li>如果两边都有墨灵，这一笔不会清除区域。</li>
-          </ol>
-        </aside>
-
-        <div id="overlay" class="overlay hidden">
-          <div class="seal-card">
-            <p id="overlayKicker">画境已开</p>
-            <h2 id="overlayTitle">第一关</h2>
-            <p id="overlayText">从浓墨的一边拖到另一边，切掉没有墨灵的部分。</p>
-            <button id="primaryButton" type="button" class="btn-primary">开始练习</button>
-          </div>
-        </div>
-
-        <div id="levelPanel" class="level-panel hidden">
-          <div class="level-panel-inner">
-            <div class="level-panel-head">
-              <span>选关</span>
-              <button id="levelPanelClose" type="button" class="btn-ghost" style="min-width:32px;min-height:32px;padding:0;font-size:18px;">×</button>
-            </div>
-            <div id="levelGrid" class="level-grid"></div>
-          </div>
-        </div>
-
-        <div class="bottom-bar">
-          <button id="soundButton" type="button" aria-pressed="true" class="btn-sound">音效开</button>
-          <button id="levelSelectButton" type="button" class="btn-ghost">选关</button>
-          <button id="tutorialButton" type="button" class="btn-ghost">帮助</button>
-          <button id="restartButton" type="button" class="btn-ghost">重试</button>
-          <button id="nextButton" type="button" class="btn-primary">下一关</button>
+      <section id="startScreen" class="start-screen" aria-label="开始界面">
+        <div class="start-mark" aria-hidden="true"></div>
+        <p class="start-kicker">一卷未竟之墨</p>
+        <h1>一笔留白</h1>
+        <p class="start-copy">落笔成界，留墨避锋</p>
+        <div class="start-actions">
+          <button id="startGame" class="ink-command" type="button">入画</button>
+          <button id="openTutorial" class="quiet-command" type="button">玩法</button>
         </div>
       </section>
+
+      <section class="progress" aria-label="剩余留白">
+        <p id="levelIndicator" class="level-indicator" aria-live="polite"></p>
+        <div class="progress-rail" aria-hidden="true">
+          <span class="progress-track"></span>
+          <span id="progressFill" class="progress-fill"></span>
+          <b class="target-knot"></b>
+        </div>
+        <div id="lifeLeaves" class="life-dots" aria-label="三次机会">
+          <i class="life-dot"></i><i class="life-dot"></i><i class="life-dot"></i>
+        </div>
+      </section>
+
+      <div class="corner-controls">
+        <button id="pause" class="corner-button" type="button" aria-label="暂停" title="暂停">Ⅱ</button>
+        <div class="settings-wrap">
+          <div id="settingsMenu" class="settings-menu" hidden>
+            <button id="sound" class="corner-button" type="button" aria-label="关闭音乐" title="关闭音乐" aria-pressed="true">♪</button>
+            <button id="openLevels" class="corner-button" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
+          </div>
+          <button id="settings" class="corner-button" type="button" aria-label="设置" title="设置">⋮</button>
+        </div>
+      </div>
+
+      <dialog id="pauseDialog" class="dialog pause-dialog">
+        <div class="dialog-actions icon-actions">
+          <button id="levels" class="menu-action" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
+          <button id="dialogRestart" class="menu-action" type="button" aria-label="重玩" title="重玩">↻</button>
+          <button id="resume" class="menu-action menu-primary" type="button" aria-label="继续" title="继续">▶</button>
+        </div>
+      </dialog>
+
+      <dialog id="tutorialDialog" class="dialog tutorial-dialog">
+        <p class="dialog-eyebrow">入画要诀</p>
+        <div class="tutorial-steps">
+          <p><b>一</b> 从墨板外起笔，穿过边界。</p>
+          <p><b>二</b> 留住所有墨轮，切去空白。</p>
+          <p><b>三</b> 墨铁封边不可落笔。</p>
+        </div>
+        <button id="closeTutorial" class="ink-command" type="button">明白</button>
+      </dialog>
+
+      <dialog id="levelDialog" class="dialog level-dialog">
+        <p class="dialog-eyebrow">十五幅墨境</p>
+        <div id="levelGrid" class="level-grid" aria-label="关卡选择"></div>
+        <button id="closeLevels" class="quiet-command" type="button">返回</button>
+      </dialog>
+
+      <dialog id="resultDialog" class="dialog result-dialog">
+        <div id="resultBurst" class="result-burst" aria-hidden="true"></div>
+        <p id="resultRank" class="result-rank"></p>
+        <span class="stamp" aria-label="留白已成"></span>
+        <p id="resultLabel" class="result-label">此幅已成</p>
+        <p id="resultScore" class="result-score"></p>
+        <dl class="result-stats">
+          <div><dt>用时</dt><dd id="resultTime"></dd></div>
+          <div><dt>墨点</dt><dd id="resultLives"></dd></div>
+          <div><dt>挥墨</dt><dd id="resultCuts"></dd></div>
+          <div><dt>最佳</dt><dd id="resultBest"></dd></div>
+        </dl>
+        <p id="resultHint" class="result-hint"></p>
+        <div class="dialog-actions icon-actions">
+          <button id="resultLevels" class="menu-action" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
+          <button id="again" class="menu-action" type="button" aria-label="重玩" title="重玩">↻</button>
+          <button id="nextLevel" class="menu-action menu-primary" type="button" aria-label="下一关" title="下一关">▶</button>
+        </div>
+      </dialog>
     </main>
-    <script src="./game.js"></script>
   </body>
 </html>

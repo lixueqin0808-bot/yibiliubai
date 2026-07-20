@@ -22,6 +22,7 @@
       </section>
 
       <section class="progress" aria-label="剩余留白">
+        <p id="levelIndicator" class="level-indicator" aria-live="polite"></p>
         <div class="progress-rail" aria-hidden="true">
           <span class="progress-track"></span>
           <span id="progressFill" class="progress-fill"></span>
@@ -68,8 +69,18 @@
       </dialog>
 
       <dialog id="resultDialog" class="dialog result-dialog">
+        <div id="resultBurst" class="result-burst" aria-hidden="true"></div>
+        <p id="resultRank" class="result-rank"></p>
         <span class="stamp" aria-label="留白已成"></span>
         <p id="resultLabel" class="result-label">此幅已成</p>
+        <p id="resultScore" class="result-score"></p>
+        <dl class="result-stats">
+          <div><dt>用时</dt><dd id="resultTime"></dd></div>
+          <div><dt>墨点</dt><dd id="resultLives"></dd></div>
+          <div><dt>挥墨</dt><dd id="resultCuts"></dd></div>
+          <div><dt>最佳</dt><dd id="resultBest"></dd></div>
+        </dl>
+        <p id="resultHint" class="result-hint"></p>
         <div class="dialog-actions icon-actions">
           <button id="resultLevels" class="menu-action" type="button" aria-label="关卡选择" title="关卡选择">▦</button>
           <button id="again" class="menu-action" type="button" aria-label="重玩" title="重玩">↻</button>
