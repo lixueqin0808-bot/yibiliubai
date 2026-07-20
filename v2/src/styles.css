@@ -246,6 +246,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   text-align: center;
 }
 
+.result-dialog:focus,
+.result-dialog:focus-visible {
+  outline: none;
+}
+
 .result-burst {
   position: absolute;
   inset: 22px 28px auto;

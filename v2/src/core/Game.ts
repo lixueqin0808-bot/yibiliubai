@@ -470,7 +470,6 @@ export class Game {
     this.drawGuide(ctx, time);
     this.physics.forEach((blade, index) => this.drawBlade(ctx, time, blade.position, index));
     this.drawCutEffect(ctx, time);
-    this.drawPreview(ctx);
     this.drawInvalidCut(ctx, time);
     this.drawMetalPulse(ctx, time);
     this.drawDanger(ctx, time);
@@ -725,21 +724,6 @@ export class Game {
       distanceToSegment(start, metal.start, metal.end) <= 0.75
       && distanceToSegment(end, metal.start, metal.end) <= 0.75
     )) ?? false;
-  }
-
-  private drawPreview(ctx: CanvasRenderingContext2D): void {
-    if (!this.preview) return;
-    ctx.save();
-    ctx.strokeStyle = this.preview.danger ? "#a5261f" : "#f4f4f2";
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = this.preview.danger ? "#a5261f" : "#ffffff";
-    ctx.beginPath();
-    ctx.moveTo(this.preview.start.x, this.preview.start.y);
-    ctx.lineTo(this.preview.end.x, this.preview.end.y);
-    ctx.stroke();
-    ctx.restore();
   }
 
   private drawInvalidCut(ctx: CanvasRenderingContext2D, time: number): void {

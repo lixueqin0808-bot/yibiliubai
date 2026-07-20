@@ -33,6 +33,9 @@ const SAMPLE_URLS: Record<SampleName, string> = {
 export class AudioManager {
   private context: AudioContext | null = null;
   private enabled = localStorage.getItem("yibiliubai-v2-sound") !== "off";
+  private readonly buffers = new Map<SampleName, AudioBuffer>();
+  private readonly loading = new Map<SampleName, Promise<void>>();
+  private readonly activeFallbacks = new Set<HTMLAudioElement>();
 
   get isEnabled(): boolean {
     return this.enabled;
@@ -49,6 +52,7 @@ export class AudioManager {
     if (!this.enabled) return;
     this.context ??= new AudioContext();
     if (this.context.state === "suspended") void this.context.resume();
+    this.preloadSamples();
   }
 
   playStart(): void {
@@ -98,7 +102,15 @@ export class AudioManager {
   private sample(name: SampleName, options: SampleOptions): void {
     if (!this.enabled) return;
     this.unlock();
+    const buffer = this.buffers.get(name);
+    if (buffer && this.context) {
+      this.playBuffer(buffer, options);
+      return;
+    }
+
+    this.loadSample(name);
     const audio = new Audio(SAMPLE_URLS[name]);
+    this.activeFallbacks.add(audio);
     audio.preload = "auto";
     audio.volume = options.volume;
     audio.playbackRate = options.rate ?? 1;
@@ -109,10 +121,45 @@ export class AudioManager {
       window.setTimeout(() => {
         audio.pause();
         audio.currentTime = 0;
+        this.activeFallbacks.delete(audio);
       }, options.duration * 1000 / audio.playbackRate);
     };
     if (options.delay) window.setTimeout(start, options.delay * 1000);
     else start();
+  }
+
+  private preloadSamples(): void {
+    (Object.keys(SAMPLE_URLS) as SampleName[]).forEach((name) => this.loadSample(name));
+  }
+
+  private loadSample(name: SampleName): void {
+    if (!this.context || this.buffers.has(name) || this.loading.has(name)) return;
+    const context = this.context;
+    const request = fetch(SAMPLE_URLS[name])
+      .then((response) => response.arrayBuffer())
+      .then((data) => context.decodeAudioData(data))
+      .then((buffer) => {
+        this.buffers.set(name, buffer);
+      })
+      .catch(() => {
+        // Keep the HTML audio fallback for browsers that cannot decode a local sample.
+      })
+      .finally(() => {
+        this.loading.delete(name);
+      });
+    this.loading.set(name, request);
+  }
+
+  private playBuffer(buffer: AudioBuffer, options: SampleOptions): void {
+    if (!this.context) return;
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    source.playbackRate.value = options.rate ?? 1;
+    gain.gain.value = options.volume;
+    source.connect(gain).connect(this.context.destination);
+    const startAt = this.context.currentTime + (options.delay ?? 0);
+    source.start(startAt, 0, options.duration);
   }
 
   private tone(
